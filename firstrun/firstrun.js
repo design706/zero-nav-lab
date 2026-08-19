@@ -7,28 +7,24 @@
  *
  * The journey data is the onboarding roadmap (8 briefs / 12 weeks). It is NOT
  * duplicated here — `patch-bundle.py` writes it into the bundle's own
- * `businessAnalystRoadmap` fixture, so his dock, his card, his tether and his
- * camera all read the same eight stops this overlay shows. One dataset, one
- * order, no seam between the roadmap and what it becomes.
+ * `businessAnalystRoadmap` fixture, grouped by the product's four categories.
+ * WEEKS BELONG TO THE ROADMAP, CATEGORIES BELONG TO THE NAVIGATION: a card says
+ * "Week 1" and "Growth & Revenue Optimization"; the dock groups by the second.
+ * The learner meets their twelve weeks in onboarding, then recognises the same
+ * work in the app organised the way the product organises it.
  *
- * ── The four beats ─────────────────────────────────────────────────────────
- *   1  welcome   world blurred and zoomed out, learner greeted by name
- *   2  journey   same blurred world, the 12 weeks as horizontal glass cards
- *   3  morph     card marks fly into the dock; the world unblurs and the
- *                camera flies down into week one
- *   4  settled   overlay removed; his screen, in its first-time-user state
+ * ── The beats ──────────────────────────────────────────────────────────────
+ *   1  welcome   land on the SHARP world, blur it, then the words arrive
+ *   2  journey   the twelve weeks as glass cards, staggered in left to right
+ *   3  morph     each card's mark flies onto its own chip as the dock rises
+ *   4  settled   zoom to week one, THEN the card, THEN the line
  *
- * ── Why a blurred world rather than a modal ───────────────────────────────
- * A modal is something you dismiss, and the world behind it is scenery.
- * Blurring the actual world says the opposite: you are already inside this
- * place, it is just not in focus yet. Which is why beat 3 unblurs rather than
- * closing anything — there was never a surface to close.
- *
- * ── Glass rules, inherited from the product source ────────────────────────
- * `backdrop-filter` is blanked by any ancestor owning `will-change` or
- * `filter`. So: the blur layer is a SIBLING of the card stage, never its
- * parent; nothing on the path to a card gets `will-change`; and entrances
- * animate the stage as a unit rather than filtering individual cards.
+ * ── Motion contract ────────────────────────────────────────────────────────
+ * One decelerate curve for entrances, one accelerate for exits; entrances run
+ * 30-50% longer than exits, because people care about what appears. Total
+ * stagger never exceeds 500ms. Nothing moves on opacity alone — every fade is
+ * carried by a transform. No `filter` or `will-change` anywhere on the path to
+ * a glass card, or its backdrop-filter is blanked and the glass reads flat.
  */
 (function () {
   'use strict';
@@ -39,6 +35,9 @@
   /* The build's fixture learner. Hardcoded because the bundle's own value is a
      frozen literal with no runtime handle — it cannot disagree with itself. */
   var LEARNER = 'Ada';
+
+  /* Entrances decelerate, exits accelerate. Used everywhere, including in CSS. */
+  var EASE_IN = 'cubic-bezier(0.16, 1, 0.3, 1)';
 
   /* His card's glass, verbatim from CARD_SURFACE in the bundle. Inline because
      it is inline there too — there is no Tailwind class for this blur. */
@@ -75,8 +74,29 @@
     });
   }
 
-  /* Week labels derived exactly as patch-bundle.py derives them, so a card and
-     its dock cluster always say the same thing. */
+  /* ── The journey ──────────────────────────────────────────────────────────
+     Week labels derived here; category read from the patched fixture so the
+     card and its dock cluster can never name the work differently. */
+  /* Company -> category title, read from THE SAME roadmap object the dock
+     groups by (exposed on `window.__navlab` by patch-bundle.py). A copy of the
+     mapping here could drift from the fixture; a reference cannot. Populated
+     lazily because the bundle defines it after this script parses. */
+  var CATEGORY_OF = null;
+  function categoryOf(company) {
+    if (!CATEGORY_OF) {
+      CATEGORY_OF = {};
+      try {
+        var rm = window.__navlab && window.__navlab.roadmap;
+        (rm && rm.categories || []).forEach(function (cat) {
+          (cat.scenarios || []).forEach(function (sc) {
+            if (sc.company && sc.company.name) CATEGORY_OF[sc.company.name] = cat.title;
+          });
+        });
+      } catch (e) { /* shape changed — cards simply omit the category chip */ }
+    }
+    return CATEGORY_OF[company];
+  }
+
   function weeks() {
     var out = [], wk = 1;
     CURRICULUM.forEach(function (c, i) {
@@ -92,19 +112,30 @@
      journey card and the scenario card are visibly the same object. */
   function briefCard(w) {
     var c = w.c;
-    var el = mk('div', 'zfr-card relative flex flex-col overflow-hidden rounded-[42px] gap-[18px] shrink-0');
+    var el = mk('div', 'zfr-card relative flex flex-col overflow-hidden rounded-[42px] gap-[16px] shrink-0');
     el.setAttribute('style', CARD_SURFACE);
 
-    var head = mk('div', 'flex items-center gap-[12px] shrink-0');
+    /* Header: the company and its week on the left, the category on the right.
+       Both vocabularies on one card is the point — this is the week you were
+       promised AND the kind of work it counts as. */
+    var head = mk('div', 'flex items-start justify-between gap-[12px] shrink-0');
+    var who = mk('div', 'flex items-center gap-[12px] min-w-0');
     var plate = mk('span', 'grid size-[46px] shrink-0 place-items-center overflow-hidden rounded-full');
     plate.setAttribute('style', 'background:rgba(255,255,255,0.94)');
     plate.innerHTML = ZFR_LOGO[c.co] || '';
     sizeSvg(plate, '26');
-    head.appendChild(plate);
-    var heads = mk('span', 'flex flex-col gap-[2px]');
+    who.appendChild(plate);
+    var heads = mk('span', 'flex flex-col gap-[2px] min-w-0');
     heads.appendChild(mk('span', 'font-pp-supply-mono text-[15px] uppercase tracking-[0.08em] text-white/70', c.co));
     heads.appendChild(mk('span', 'font-pp-supply-mono text-[13px] uppercase tracking-[0.08em] text-white/35', w.label));
-    head.appendChild(heads);
+    who.appendChild(heads);
+    head.appendChild(who);
+
+    var cat = categoryOf(c.co);
+    if (cat) {
+      var catChip = mk('span', 'zfr-cat shrink-0 rounded-full bg-white/10 px-[11px] py-[6px] font-pp-supply-mono text-[11px] uppercase tracking-[0.08em] text-white/50', cat);
+      head.appendChild(catChip);
+    }
     el.appendChild(head);
     el._logo = plate;
 
@@ -118,12 +149,11 @@
     var av = mk('span', 'zfr-av grid size-[30px] shrink-0 place-items-center overflow-hidden rounded-full');
     av.setAttribute('style', 'background:rgba(255,255,255,0.14)');
     /* Initial underneath, photo on top. `MFACE` only covers some of the cast,
-       and an empty grey disc reads as a broken image — the onboarding does the
-       same initial-behind-portrait trick for exactly this reason. */
+       and an empty grey disc reads as a broken image. */
     av.innerHTML =
       '<span class="font-google-sans-flex text-[13px] text-white/70">' + esc(c.mgr[0].charAt(0)) + '</span>' +
       (MFACE[c.mgr[0]]
-        ? '<img src="' + MFACE[c.mgr[0]] + '" alt="" class="size-full object-cover" onerror="this.remove()">'
+        ? '<img src="' + MFACE[c.mgr[0]] + '" alt="" onerror="this.remove()">'
         : '');
     mgr.appendChild(av);
     mgr.appendChild(mk('span', 'font-google-sans-flex text-[16px] text-white/80',
@@ -157,7 +187,7 @@
   /* The two unlocks. Rendered on his locked-CTA plate, which is exactly what
      they are: something that is not open yet. */
   function unlockCard(u, green) {
-    var el = mk('div', 'zfr-card zfr-card-unlock relative flex flex-col justify-center overflow-hidden rounded-[42px] gap-[18px] shrink-0');
+    var el = mk('div', 'zfr-card relative flex flex-col justify-center overflow-hidden rounded-[42px] gap-[16px] shrink-0');
     el.setAttribute('style', CARD_SURFACE);
 
     var mark = mk('span', 'grid size-[46px] shrink-0 place-items-center rounded-full text-[22px]');
@@ -178,19 +208,28 @@
   }
 
   /* ── Morph targets ────────────────────────────────────────────────────────
-     After the bundle patch the dock has exactly one cluster per brief in the
-     same order, so this is a straight 1:1 zip rather than an approximation. */
+     Each brief flies to ITS OWN company chip, not to its cluster — the chips
+     carry the logos, so a mark landing anywhere else would be landing on the
+     wrong thing. His pills expose `aria-label="{title}, {company}"`. */
   function dockTargets(dock) {
     var kids = [].slice.call(dock.firstElementChild.children);
-    var pills = kids.filter(function (k) { return k.tagName === 'BUTTON'; });
-    var find = function (re) {
-      return pills.filter(function (p) { return re.test(p.getAttribute('aria-label') || ''); })[0];
+    var buttons = kids.filter(function (k) { return k.tagName === 'BUTTON'; });
+    var milestone = function (re) {
+      return buttons.filter(function (b) { return re.test(b.getAttribute('aria-label') || ''); })[0];
     };
-    return {
-      clusters: kids.filter(function (k) { return k.tagName === 'DIV'; }),
-      portfolio: find(/portfolio/i),
-      jobportal: find(/job/i)
+    /* Company chips live inside the cluster DIVs. Matched on the aria-label's
+       trailing company name so a title containing a comma cannot fool it. */
+    var chipFor = function (company) {
+      var hit = null;
+      kids.filter(function (k) { return k.tagName === 'DIV'; }).forEach(function (cluster) {
+        [].slice.call(cluster.querySelectorAll('[aria-label]')).forEach(function (el) {
+          var label = el.getAttribute('aria-label') || '';
+          if (!hit && new RegExp(',\\s*' + company + '\\s*$', 'i').test(label)) hit = el;
+        });
+      });
+      return hit;
     };
+    return { chipFor: chipFor, portfolio: milestone(/portfolio/i), jobportal: milestone(/job/i) };
   }
 
   function centre(el) {
@@ -198,9 +237,16 @@
     return { x: b.left + b.width / 2, y: b.top + b.height / 2, w: b.width, h: b.height };
   }
 
-  /* A cloned mark flown from a card to its place on the dock. Cloned so the
-     card can keep dissolving behind it, and portalled to <body> so no ancestor
-     clip or transform can cut the path short. */
+  /**
+   * Fly a card's mark onto its chip.
+   *
+   * The clone shrinks from the card's 46px plate to the chip's 26px mark, so
+   * the start and end states are the same object at two sizes rather than two
+   * different things crossing paths. It fades out over the last quarter of the
+   * flight while the dock is fading in underneath — that overlap is what makes
+   * it read as arriving rather than as a second copy sitting on top, which is
+   * how the previous version failed.
+   */
   function fly(sourceEl, targetEl, delay) {
     if (!sourceEl || !targetEl) return;
     var a = centre(sourceEl), b = centre(targetEl);
@@ -209,17 +255,16 @@
     clone.style.cssText += ';position:fixed;left:' + (a.x - a.w / 2) + 'px;top:' + (a.y - a.h / 2) +
       'px;width:' + a.w + 'px;height:' + a.h + 'px;margin:0;z-index:100000;pointer-events:none;';
     document.body.appendChild(clone);
-    var scale = Math.max(0.32, Math.min(1, (b.h || 26) / (a.h || 46)));
+    var scale = Math.max(0.3, Math.min(1, (b.h || 26) / (a.h || 46)));
     clone.animate([
-      { transform: 'translate(0,0) scale(1)', opacity: 1 },
-      { transform: 'translate(' + (b.x - a.x) + 'px,' + (b.y - a.y) + 'px) scale(' + scale + ')', opacity: 0.95 }
+      { transform: 'translate(0,0) scale(1)', opacity: 1, offset: 0 },
+      { opacity: 1, offset: 0.75 },
+      { transform: 'translate(' + (b.x - a.x) + 'px,' + (b.y - a.y) + 'px) scale(' + scale + ')',
+        opacity: 0, offset: 1 }
     ], {
-      duration: REDUCE ? 0 : 780, delay: REDUCE ? 0 : delay,
-      easing: 'cubic-bezier(0.16,1,0.3,1)', fill: 'forwards'
-    }).onfinish = function () {
-      clone.animate([{ opacity: 0.95 }, { opacity: 0 }], { duration: REDUCE ? 0 : 200, fill: 'forwards' })
-        .onfinish = function () { clone.remove(); };
-    };
+      duration: REDUCE ? 0 : 720, delay: REDUCE ? 0 : delay,
+      easing: EASE_IN, fill: 'forwards'
+    }).onfinish = function () { clone.remove(); };
   }
 
   /* ── The flow ─────────────────────────────────────────────────────────────*/
@@ -238,12 +283,17 @@
     head.appendChild(chip);
     wrap.appendChild(head);
 
+    /* Full-bleed rail. The mask is applied to a WRAPPER, never to the scroller
+       that holds the glass — a mask on an ancestor of a backdrop-filter element
+       blanks its backdrop the same way `filter` does. */
+    var rail = mk('div', 'zfr-rail');
     var scroller = mk('div', 'zfr-scroller');
     scroller.id = 'zfrScroller';
+
     weeks().forEach(function (w) {
       var card = briefCard(w);
       scroller.appendChild(card);
-      cards.push({ el: card, kind: 'co' });
+      cards.push({ el: card, kind: 'co', company: w.c.co });
       /* The portfolio unlock is authored INSIDE a brief in CURRICULUM, so it
          renders where the onboarding puts it — right after that week. */
       if (w.c.unlock) {
@@ -255,84 +305,93 @@
     var fin = unlockCard(RM_FINALE, true);
     scroller.appendChild(fin);
     cards.push({ el: fin, kind: 'jobportal' });
-    wrap.appendChild(scroller);
+
+    rail.appendChild(scroller);
+    wrap.appendChild(rail);
     return wrap;
   }
 
-  function scroller() { return document.getElementById('zfrScroller'); }
-  /* Set once a page() produces no movement. Measurement alone is not enough to
-     decide "there is no more journey": if every card already fits on screen
-     there is nothing to scroll, and on a viewport that reports oddly the
-     arithmetic can never reach its own threshold. Either way the CTA must
-     still become "Let's begin" — a Next button that does nothing is a dead
-     end with no way out of the flow. */
-  var exhausted = false;
-
-  function atEnd() {
-    var sc = scroller();
-    if (!sc) return true;
-    if (exhausted) return true;
-    if (sc.scrollWidth <= sc.clientWidth + 1) return true;   // nothing to page
-    return sc.scrollLeft >= sc.scrollWidth - sc.clientWidth - 48;
-  }
-  /* Scroll is tweened by hand rather than with `behavior:'smooth'`.
-     Chrome cancels a programmatic smooth scroll whenever scroll-snap is in
-     play, which left the pager stuck on the first page — setting scrollLeft
-     each frame is immune to that and gives the same easing. */
-  function page() {
-    var sc = scroller();
-    if (!sc) return Promise.resolve();
-    var max = sc.scrollWidth - sc.clientWidth;
-    var from = sc.scrollLeft;
-    var to = Math.max(0, Math.min(from + Math.max(320, sc.clientWidth * 0.86), max));
-    if (to <= from + 1) { exhausted = true; return Promise.resolve(); }
-    if (REDUCE) { sc.scrollLeft = to; return Promise.resolve(); }
-    return new Promise(function (done) {
-      var t0 = performance.now(), dur = 520;
-      (function step(now) {
-        var t = Math.min(1, (now - t0) / dur);
-        var e = 1 - Math.pow(1 - t, 4);            // quartic out, matches the flow
-        sc.scrollLeft = from + (to - from) * e;
-        if (t < 1) requestAnimationFrame(step);
-        else { if (Math.abs(sc.scrollLeft - from) < 2) exhausted = true; done(); }
-      })(t0);
-    });
-  }
+  /* Stagger budget: 10 cards must finish arriving inside 500ms, so the step is
+     derived from the count rather than fixed. */
+  function staggerStep(n) { return Math.min(46, Math.floor(440 / Math.max(1, n))); }
 
   async function morph(dock) {
     setBeat('morph');
     var t = dockTargets(dock);
+    var step = staggerStep(cards.length);
 
-    /* 1. The marks fly. One brief, one cluster — the dock carries the same
-          eight stops, so nothing has to be approximated. */
-    var co = cards.filter(function (c) { return c.kind === 'co'; });
-    co.forEach(function (c, i) { fly(c.el._logo, t.clusters[i], i * 52); });
-    var pf = cards.filter(function (c) { return c.kind === 'portfolio'; })[0];
-    var jp = cards.filter(function (c) { return c.kind === 'jobportal'; })[0];
-    if (pf) fly(pf.el._logo, t.portfolio, co.length * 52);
-    if (jp) fly(jp.el._logo, t.jobportal, co.length * 52 + 80);
+    /* 1. Header and CTA leave first — they have no counterpart on the dock, so
+          holding them while the marks travel just adds noise. */
+    stage.classList.add('zfr-chrome-out');
+    await wait(140);
 
-    /* 2. The cards leave while the marks are still travelling, so the dock is
-          what they arrive onto rather than what replaces them. */
-    stage.classList.add('zfr-out');
-    await wait(260);
+    /* 2. The marks fly, in journey order, while their cards sink away. The dock
+          fades up underneath during the same window (CSS, keyed on the beat),
+          so each mark lands on a chip that is already there. */
+    stage.classList.add('zfr-cards-out');
+    cards.forEach(function (c, i) {
+      var target = c.kind === 'co' ? t.chipFor(c.company)
+                 : c.kind === 'portfolio' ? t.portfolio : t.jobportal;
+      fly(c.el._logo, target, i * step);
+      c.el.style.transitionDelay = (i * step) + 'ms';
+    });
 
-    /* 3. The world comes back into focus. */
+    await wait(step * cards.length + 420);
+
+    /* 3. Only now does the world come back into focus. Dock first, world
+          second: the navigation has to visibly exist before the map sharpens,
+          or the unblur steals the moment the morph just earned. */
     setBeat('unblur');
-    await wait(600);
+    await wait(700);
 
-    /* 4. …and the camera drops into week one. His animator: a 1s cinematic
-          quintic that dips the zoom mid-flight. The tether and the scenario
-          card are his too — they were only hidden, and they re-key on arrival. */
+    /* 4. Landing, strictly in order. His camera animator runs ~1s. */
     try {
       if (window.__navlab && window.__navlab.flyToCompany) window.__navlab.flyToCompany(CURRICULUM[0].co);
     } catch (e) { /* a missing map marker must never strand the flow */ }
-    await wait(500);
 
+    /* 5. The card arrives while the city is still settling — not after it has
+          stopped. That is deliberate and load-bearing: his `BuildingLink` only
+          tracks for a short window after a map transform, so a card revealed
+          once everything is still finds a tracker that has already given up,
+          and no line is ever drawn. Landing it inside the flight keeps his
+          tracker live, and it also reads better — the card arrives with the
+          city rather than after an empty pause. */
+    await wait(620);
+    setBeat('card');
+    await wait(520);
+
+    /* 6. …and only then does the line reach out and attach to it. */
     setBeat('settled');
-    await wait(950);
+    await wait(REDUCE ? 0 : 900);
+
     root.remove();
     delete document.documentElement.dataset.zfrBeat;
+    releaseChrome();
+  }
+
+  /**
+   * Hand his chrome back, and make sure nothing was left mid-entrance.
+   *
+   * The scenario card is a framer element whose `initial` is
+   * `opacity: 0; transform: translateY(14px) scale(0.97)`. While this flow holds
+   * it hidden, that entrance can end up never running — and once our rules are
+   * removed the inline `initial` is all that is left, so the card stays
+   * invisible on a screen that has no flow on it any more. Its tether then
+   * hides itself too, because his tracking will not draw a line to a card it
+   * does not consider present.
+   *
+   * So this checks rather than assumes: if the card is still transparent a beat
+   * after we let go, finish the entrance ourselves. It is a no-op on every
+   * normal run — which is exactly when a repair should do nothing.
+   */
+  function releaseChrome() {
+    setTimeout(function () {
+      var slot = document.querySelector('div[class*="right-[90px]"][class*="z-30"]');
+      if (!slot) return;
+      if (parseFloat(getComputedStyle(slot).opacity || '1') > 0.9) return;
+      slot.style.opacity = '1';
+      slot.style.transform = 'none';
+    }, 120);
   }
 
   async function boot() {
@@ -340,27 +399,18 @@
     if (!dock) return;                    // no dock, no flow — leave his lab alone
 
     root = mk('div'); root.id = 'zfr';
-    /* Geometry inline and MEASURED, not `100vw/100vh`.
+    /* `inset: 0`, not a measured or `100vw/100vh` box.
      *
-     * Two problems with viewport units here. His bundle paints inside a
-     * transformed wrapper, which becomes the containing block for any
-     * `position: fixed` descendant, so `inset: 0` cannot be trusted on its own.
-     * And a `vw`/`vh` box is resolved once at boot — if the window is resized,
-     * or the tab is restored from a background state where the viewport
-     * momentarily reads small, the overlay keeps the stale size forever and
-     * renders as a box in the corner.
+     * A viewport-unit box is resolved ONCE, so a resize — or a tab that reports
+     * a stale viewport while it is being restored — leaves the overlay frozen
+     * at the wrong size, rendering as a panel in the corner. `inset: 0` is
+     * re-resolved by the engine on every layout, so it cannot go stale.
      *
-     * `documentElement.clientWidth/Height` is the honest number, and re-reading
-     * it on resize keeps the flow full-bleed for the whole session. */
-    var fit = function () {
-      var d = document.documentElement;
-      root.style.width = (window.innerWidth || d.clientWidth) + 'px';
-      root.style.height = (window.innerHeight || d.clientHeight) + 'px';
-    };
+     * It is safe here specifically because `html` and `body` carry no
+     * transform: the transformed wrapper his bundle paints inside is deeper in
+     * the tree, so it never becomes the containing block for this element. */
     root.style.cssText =
-      'position:fixed;top:0;left:0;z-index:9000;display:grid;place-items:center;';
-    fit();
-    addEventListener('resize', fit);
+      'position:fixed;inset:0;z-index:9000;display:grid;place-items:center;';
 
     /* SIBLING of the stage, never its parent — an ancestor owning
        backdrop-filter blanks the backdrop of every glass card inside it. */
@@ -374,7 +424,8 @@
     try { if (window.__navlab && window.__navlab.releaseCamera) window.__navlab.releaseCamera(); } catch (e) {}
 
     var w = mk('div', 'zfr-welcome');
-    w.appendChild(mk('span', 'font-pp-supply-mono text-[14px] uppercase tracking-[0.18em] text-white/55', 'WELCOME TO ZERO'));
+    /* No eyebrow. "WELCOME TO ZERO" above "Welcome to Zero, Ada." said the same
+       thing twice, and the headline says it better. */
     w.appendChild(mk('h1', 'zfr-h1 font-stk-bureau-serif tracking-[-0.02em] text-white',
       'Welcome to Zero, ' + LEARNER + '.'));
     w.appendChild(mk('p', 'font-google-sans-flex text-[22px] leading-[1.4] text-white/70',
@@ -382,26 +433,35 @@
     var next1 = mk('button', 'zfr-cta', 'Next');
     w.appendChild(next1);
     stage.appendChild(w);
+
+    /* The blur is an EVENT, not a backdrop. The learner lands on the sharp
+       world they just downloaded, watches it soften, and only then is spoken
+       to — arriving somewhere, rather than finding a screen already over it. */
+    setBeat('sharp');
+    await wait(520);
     setBeat('welcome');
 
     next1.onclick = function () {
-      stage.innerHTML = '';
-      stage.appendChild(buildJourney());
-      var bar = mk('div', 'zfr-bar');
-      var go = mk('button', 'zfr-cta', 'Next');
-      bar.appendChild(go);
-      stage.appendChild(bar);
-      setBeat('journey');
+      /* Welcome leaves before the journey arrives — never a crossfade, or the
+         two states smear through each other. */
+      stage.classList.add('zfr-swap');
+      setTimeout(function () {
+        stage.classList.remove('zfr-swap');
+        stage.innerHTML = '';
+        stage.appendChild(buildJourney());
+        var bar = mk('div', 'zfr-bar');
+        /* One CTA, and it is the last one. The rail scrolls; a Next button that
+           pages a scroller is a worse scrollbar. */
+        var go = mk('button', 'zfr-cta', "Let's begin");
+        bar.appendChild(go);
+        stage.appendChild(bar);
+        setBeat('journey');
 
-      var sync = function () { go.textContent = atEnd() ? "Let's begin" : 'Next'; };
-      var sc = scroller();
-      if (sc) sc.addEventListener('scroll', sync, { passive: true });
-      sync();
+        var step = staggerStep(cards.length);
+        cards.forEach(function (c, i) { c.el.style.animationDelay = (120 + i * step) + 'ms'; });
 
-      go.onclick = function () {
-        if (atEnd()) morph(dock);
-        else page().then(sync);
-      };
+        go.onclick = function () { morph(dock); };
+      }, REDUCE ? 0 : 260);
     };
   }
 

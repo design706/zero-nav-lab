@@ -2,76 +2,83 @@
 
 **Live:** https://design706.github.io/zero-nav-lab/
 
-This is **Sanjay's `zero-nav-lab` build**, plus one folder (`firstrun/`), three
-lines in `index.html`, and a scripted patch to his bundle's fixtures. None of his
+Sanjay's `zero-nav-lab` build, plus one folder (`firstrun/`), three lines in
+`index.html`, and a scripted patch to his bundle's fixtures. None of his
 components were rewritten — the flow drives them.
 
-## The flow
+## The beats
 
-**Welcome to Zero, Ada.** → *Next* → **Your journey**, twelve weeks as horizontal
-glass cards → *Next…* → *Let's begin* → the card marks fly into the dock, the
-world comes back into focus, the camera drops into week one, and his scenario
-card and tether land on it.
+| | |
+|---|---|
+| **1 · welcome** | Lands on the **sharp** world, blurs it, *then* speaks. "Welcome to Zero, Ada." / "We've mapped out your journey." / **Next** |
+| **2 · journey** | The twelve weeks as glass cards, staggered in left→right on a full-bleed rail with fading edges. Free scroll. One CTA: **Let's begin** |
+| **3 · morph** | Each card's mark flies onto **its own** dock chip while the dock fades up underneath, then the world comes back into focus |
+| **4 · landing** | Camera flies into week one's building → the card lands as the city settles → his tether draws the line |
 
-The world map is **blurred, not hidden**, from the first frame. A modal is
-something you dismiss and the world behind it is scenery; blurring the actual
-world says you are already inside this place, it is just not in focus yet. Which
-is why the last beat *unblurs* rather than closing anything.
+The blur is an *event*, not a backdrop: a modal is something you dismiss, and
+the world behind it is scenery. Blurring the actual world says you are already
+inside this place, it is just not in focus yet — which is why the last beat
+unblurs rather than closing anything.
 
-## One dataset
+## Weeks belong to the roadmap. Categories belong to the navigation.
 
-The journey is the **onboarding roadmap** — 8 briefs, 12 weeks, named managers,
-tools, "you hand in", with the portfolio unlock where the onboarding authors it
-(inside week 3) and the job portal as the finale.
+A card says **Week 1** *and* **Growth & Revenue Optimization**. The dock groups
+by the second, using the product's own four category ids and titles. The learner
+meets their twelve weeks in onboarding, then recognises the same work in the app
+organised the way the product organises it.
 
-That data is not duplicated in the overlay. `firstrun/patch-bundle.py` writes it
-into the bundle's own `businessAnalystRoadmap` fixture, so **his** dock, **his**
-scenario card, **his** tether and **his** camera all read the same eight stops.
-The dock reads `Week 1 · Stripe … Weeks 11-12 · Amplitude`; the card reads
-`POSITION 1 of 8`. Cards and navigation cannot drift, because they are the same
-list.
+| Category | Briefs |
+|---|---|
+| Growth & Revenue Optimization | Stripe · Notion · Shopify |
+| Operational Efficiency & Cost Reduction | Salesforce |
+| Product & KPI Architecture | Uber · Amplitude |
+| *Portfolio* | after three categories |
+| Market Entry & Strategic Expansion | DoorDash · Airbnb |
+| *Job Portal* | the finale |
+
+`ai-enablement` — his fifth category — is absent: none of the eight onboarding
+briefs is AI work, and an empty cluster renders as a dead node.
 
 ## What the patch does, and why
 
-Sanjay's source was never pushed — the repo is build output with no sourcemaps —
-so driving his components means editing the fixtures they read. Every target is
-asserted unique before replacement and the script refuses to run twice.
+His source was never pushed (build output, no sourcemaps), so driving his
+components means editing the fixtures they read. Every target is asserted unique
+before replacement; the script refuses to run twice.
 
 | Patch | Why |
 |---|---|
-| `businessAnalystRoadmap` replaced | the onboarding journey becomes the product's journey |
-| `completedCount: 0` | the single progress input; makes brief 1 current and the rest locked — the genuine first-time-user dock |
+| `businessAnalystRoadmap` replaced | the onboarding journey becomes the product's journey, grouped by his categories |
+| `completedCount: 0` | the single progress input — brief 1 current, the rest locked: the genuine first-run dock |
 | `CURRENT_SEQUENCE 6 → 1` | a second, independent fixture feeding the user store; without it the screen disagrees with itself |
-| `afterCategories 5 → 8` | Job Portal is the finale of eight categories |
-| `COMPANY_LOGOS` + 3 | DoorDash, Salesforce and Amplitude are not in his map, and a company with no logo renders as a blank chip |
-| `window.__navlab` | `flyToCompany` / `releaseCamera` are module-scoped with no bridge; the overlay cannot move the camera without it |
+| `afterCategories 5 → 4` | Job Portal closes a four-category rail |
+| `COMPANY_LOGOS` +3 | DoorDash, Salesforce, Amplitude — a company with no logo renders as a blank chip |
+| `COMPANY_IDS` +2 | **Stripe and Uber had no map id**, so they got no building marker and his tether had nothing to anchor to. The ids come from his own `worldMapPoints` |
+| `window.__navlab` | camera handle + the roadmap object, both module-scoped with no bridge |
 | `streak 6 → 0` | a first-time learner has no streak |
 
-Re-run after restoring the bundle from git:
-
 ```bash
+git checkout <pristine> -- assets/index-CswphSY3.js
 python3 firstrun/patch-bundle.py
 ```
 
-## Files
+## Motion contract
 
-| File | What |
-|---|---|
-| `firstrun/patch-bundle.py` | the fixture patch, idempotent and self-verifying |
-| `firstrun/roadmap-data.js` | CURRICULUM / MFACE / ZFR_LOGO / RM_FINALE, lifted verbatim from `zero-onboarding-mvp.html` |
-| `firstrun/firstrun.js` | the four beats and the morph |
-| `firstrun/firstrun-shell.css` | layout, the blur, the reveal choreography — the only authored styles |
+One decelerate curve for entrances (`cubic-bezier(0.16, 1, 0.3, 1)`), one
+accelerate for exits. Entrances run 30–50% longer than exits. Total stagger
+stays under 500ms — the step is derived from the card count, not fixed. Nothing
+animates on opacity alone.
 
-Card and chip appearance reuses the classes already compiled into his stylesheet
-(`rounded-[42px]`, `font-stk-bureau-serif`, `bg-white/10`, his glass
-`CARD_SURFACE`) so a journey card and his scenario card are the same object.
+## Four traps worth keeping
 
-## Two gotchas worth keeping
-
-- **Only the arbitrary values Sanjay used exist in his CSS.** Tailwind emits what
-  it sees, so `text-[74px]`, `p-[26px]` and `leading-[1.06]` are absent — a class
-  that does not exist fails silently and a heading renders at body size. The four
-  sizes this flow needs are defined in `firstrun-shell.css` instead.
-- **`backdrop-filter` dies under an ancestor with `will-change` or `filter`.** The
-  blur layer is therefore a *sibling* of the card stage, never its parent, and
-  nothing on the path to a card gets a `will-change` hint.
+- **`backdrop-filter` dies under an ancestor with `will-change`, `filter` or
+  `mask`.** The blur layer is a *sibling* of the card stage; the rail's edge-fade
+  mask sits on a wrapper, one level above the scroller that holds the glass.
+- **Only the arbitrary values Sanjay used exist in his CSS.** `text-[74px]`,
+  `p-[26px]`, `leading-[1.06]` are absent — a missing class fails silently and a
+  heading renders at body size. Ours are defined in `firstrun-shell.css`.
+- **A flex column will stretch to its scroller's content.** Without `min-width: 0`
+  on every ancestor, the card row pushed the stage to 4492px in a 1280px viewport
+  and carried the header chip and CTA off screen.
+- **His tether only tracks for a moment after a map transform.** Reveal the card
+  *inside* the camera flight, not after it settles, or his tracker has already
+  given up and no line is ever drawn.

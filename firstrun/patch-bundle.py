@@ -26,10 +26,9 @@ WHAT IS PATCHED, AND WHY EACH ONE
    Shape is mirrored field-for-field from the literal being replaced (see
    `SCENARIO_TEMPLATE_NOTE` below) so his code paths hit no undefined.
 
-   One brief per category, because the dock renders CATEGORIES as clusters —
-   eight single-scenario clusters give an eight-chip rail in journey order, and
-   the cluster label carries the week ("Week 1", "Weeks 3-4"), which is the
-   onboarding metadata landing in the navigation.
+   The briefs are GROUPED BY CATEGORY, using the product's own four category
+   ids and titles — see `CATEGORY_TITLES` for why weeks belong to the roadmap
+   and categories belong to the navigation.
 
 2. `completedCount` — 0. It is the single progress input; `scenarioStatus`
    derives everything from it, so 0 makes brief 1 `current` and the rest
@@ -41,10 +40,10 @@ WHAT IS PATCHED, AND WHY EACH ONE
    completed scenarios; both must move together or the screen disagrees with
    itself.
 
-4. `JOURNEY_MILESTONES` afterCategories 5 -> 8. Portfolio stays at 3 — the
+4. `JOURNEY_MILESTONES` afterCategories 5 -> 4. Portfolio stays at 3 — the
    onboarding authors its unlock inside brief 3 ("three scenarios in, recruiters
-   can see it"), so 3 is already correct. Job Portal is the finale, which is
-   category 8 now that there are eight rather than five.
+   can see it"), and three categories still precede it. Job Portal is the
+   finale, which is category 4 now that four categories carry the eight briefs.
 
 5. `COMPANY_LOGOS` — extended with DoorDash, Salesforce and Amplitude as inline
    data-URI SVGs. His map covers 16 companies but not these three, and a company
@@ -53,10 +52,12 @@ WHAT IS PATCHED, AND WHY EACH ONE
    better than post-hoc DOM fixing: the chips, the scenario card and any future
    surface all resolve the logo through the same lookup he already wrote.
 
-6. `window.__navlab` — the camera handle. `flyToCompany` / `releaseCamera` are
-   module-scoped with no window bridge and no CustomEvent, so an overlay cannot
-   drive the map without this one insertion. Everything else the flow needs is
-   reachable through the DOM.
+6. `window.__navlab` — the camera handle, plus the roadmap itself.
+   `flyToCompany` / `releaseCamera` are module-scoped with no window bridge and
+   no CustomEvent, so an overlay cannot drive the map without this insertion.
+   `roadmap` is exposed alongside them so the overlay's cards can read their
+   category from THE SAME OBJECT the dock groups by — a copy of the mapping in
+   the overlay could drift from the one in the fixture; a reference cannot.
 
 7. `streak:6` -> 0. Cosmetic: a first-time learner has no streak.
 
@@ -152,52 +153,129 @@ def load_logo(name):
     return "data:image/svg+xml;base64," + __import__("base64").b64encode(svg.encode()).decode()
 
 
+def map_point_ids(bundle):
+    """company label -> map placement UUID, read from his own `worldMapPoints`."""
+    i = bundle.index("worldMapPoints=[")
+    lit = brace_match(bundle, bundle.index("[", i))
+    return {m.group(2): m.group(1)
+            for m in re.finditer(r'\{id:"([^"]+)",label:"([^"]+)"', lit)}
+
+
 def week_label(w0, w1):
     return f"Week {w0}" if w0 == w1 else f"Weeks {w0}-{w1}"
 
 
+# ── The navigation's grouping ────────────────────────────────────────────────
+#
+# WEEKS ARE FOR THE ROADMAP; CATEGORIES ARE FOR THE NAVIGATION.
+#
+# v2 made each brief its own category, so the dock read "Week 1 · Week 2 · …".
+# That was wrong twice over: it threw away the grouping the original nav bar
+# had, and it made the dock a second copy of the roadmap instead of the thing
+# the roadmap resolves into. A learner should see their twelve weeks during
+# onboarding, then recognise the SAME work in the app organised the way the
+# product organises it — by the kind of problem it is.
+#
+# So these four ids and titles are VERBATIM from the roadmap fixture being
+# replaced (`git show dffa647:assets/index-CswphSY3.js`). The onboarding's
+# eight briefs are mapped onto them by what each brief actually asks for.
+#
+# `ai-enablement` — the fifth original category — is deliberately absent: none
+# of the eight briefs is AI-enablement work, and an empty cluster renders as a
+# dead node on the rail. Adding it needs a ninth brief, which is an authoring
+# decision, not a patching one.
+CATEGORY_TITLES = {
+    "growth-revenue": "Growth & Revenue Optimization",
+    "operational-efficiency": "Operational Efficiency & Cost Reduction",
+    "product-kpi-architecture": "Product & KPI Architecture",
+    "market-entry": "Market Entry & Strategic Expansion",
+}
+
+# Rail order, mirroring the original nav. The milestones land between them by
+# `afterCategories`, so this order also decides where Portfolio sits.
+CATEGORY_ORDER = [
+    "growth-revenue",
+    "operational-efficiency",
+    "product-kpi-architecture",
+    "market-entry",
+]
+
+# Company -> category. Keyed by company because that is the stable identifier
+# across the onboarding data and the bundle.
+BRIEF_CATEGORY = {
+    "Stripe": "growth-revenue",              # churn diagnosis, funnel + cohort
+    "DoorDash": "market-entry",              # which city do we launch next
+    "Notion": "growth-revenue",              # activation experiment
+    "Salesforce": "operational-efficiency",  # renewal at risk, brief the room
+    "Shopify": "growth-revenue",             # month-two retention leak
+    "Uber": "product-kpi-architecture",      # experiment read-out, ship/kill
+    "Airbnb": "market-entry",                # pick our next market
+    "Amplitude": "product-kpi-architecture", # funnel teardown, metric trees
+}
+
+
 def build_roadmap(curriculum):
-    """The onboarding journey, in the shape his components read."""
-    categories = []
+    """The onboarding journey, grouped the way the navigation groups work.
+
+    Sequence order stays WEEK order 1..8 — the journey is still the twelve
+    weeks the learner was shown, and `scenarioStatus` still makes brief 1
+    current and the rest locked. Only the grouping changes, which is exactly
+    what the dock renders.
+    """
+    weeks_by_company = {}
     week = 1
     for i, c in enumerate(curriculum):
-        seq = i + 1
         w0, w1 = week, week + c["weeks"] - 1
         week += c["weeks"]
+        weeks_by_company[c["co"]] = (i + 1, w0, w1, c)
+
+    buckets = {cid: [] for cid in CATEGORY_ORDER}
+    for co, (seq, w0, w1, c) in weeks_by_company.items():
+        cid = BRIEF_CATEGORY.get(co)
+        if not cid:
+            sys.exit(f"no category mapped for {co} — refusing to guess")
         difficulty = "Beginner" if seq <= 3 else ("Intermediate" if seq <= 6 else "Advanced")
         mgr_name, mgr_role = c["mgr"][0], c["mgr"][1]
-        # `problem_statement` is the card's description slot. The onboarding's
-        # own metadata — who you work with and what you hand in — is what goes
-        # there, so the card says the same thing the journey card said.
-        problem = (
-            f"With {mgr_name}, {mgr_role}. "
-            f"You hand in {c['deliver']}."
-        )
-        categories.append(
+        buckets[cid].append(
             {
-                "id": f"week-{seq:02d}",
-                # The cluster label in the dock. Carries the week, which is the
-                # unit the onboarding roadmap is measured in.
-                "title": week_label(w0, w1),
-                "concepts": c["skills"],
-                "scenarios": [
-                    {
-                        "id": f"wk-{seq:02d}",
-                        "sequence_order": seq,
-                        "title": c["prob"],
-                        "problem_statement": problem,
-                        "user_role": "Business Analyst",
-                        # A week of part-time work, in minutes. Kept round.
-                        "estimated_minutes": c["weeks"] * 150,
-                        "difficulty": difficulty,
-                        "skills": c["skills"],
-                        "tools": c["tools"],
-                        "deliverables": [c["deliver"], "Final Proposal Presentation"],
-                        "company": {"name": c["co"]},
-                    }
-                ],
+                "id": f"wk-{seq:02d}",
+                "sequence_order": seq,
+                "title": c["prob"],
+                # The card's description slot. The onboarding's own metadata —
+                # who you work with and what you hand in — is what belongs there.
+                "problem_statement": f"With {mgr_name}, {mgr_role}. You hand in {c['deliver']}.",
+                "user_role": "Business Analyst",
+                "estimated_minutes": c["weeks"] * 150,
+                "difficulty": difficulty,
+                "skills": c["skills"],
+                "tools": c["tools"],
+                "deliverables": [c["deliver"], "Final Proposal Presentation"],
+                "company": {"name": co},
             }
         )
+
+    categories = []
+    for cid in CATEGORY_ORDER:
+        scenarios = sorted(buckets[cid], key=lambda s: s["sequence_order"])
+        if not scenarios:
+            continue
+        # Concepts are DERIVED from the briefs in the cluster rather than
+        # re-authored, so they can never describe work the cluster does not hold.
+        concepts, seen = [], set()
+        for s_ in scenarios:
+            for k in s_["skills"]:
+                if k.lower() not in seen:
+                    seen.add(k.lower())
+                    concepts.append(k)
+        categories.append(
+            {
+                "id": cid,
+                "title": CATEGORY_TITLES[cid],
+                "concepts": concepts,
+                "scenarios": scenarios,
+            }
+        )
+
     return {"journeyTitle": "Business Analyst", "completedCount": 0, "categories": categories}
 
 
@@ -211,7 +289,10 @@ def main():
 
     curriculum = load_curriculum()
     roadmap = build_roadmap(curriculum)
-    print(f"journey: {len(curriculum)} briefs, {sum(c['weeks'] for c in curriculum)} weeks")
+    print(f"journey: {len(curriculum)} briefs, {sum(c['weeks'] for c in curriculum)} weeks, "
+          f"{len(roadmap['categories'])} categories")
+    for cat in roadmap["categories"]:
+        print("   ", cat["title"], "->", ", ".join(x["company"]["name"] for x in cat["scenarios"]))
 
     def replace_once(hay, needle, repl, what):
         n = hay.count(needle)
@@ -230,7 +311,8 @@ def main():
     s = replace_once(s, "CURRENT_SEQUENCE=6", "CURRENT_SEQUENCE=1", "CURRENT_SEQUENCE")
 
     # 4 — Job Portal is the finale of eight categories, not five.
-    s = replace_once(s, "afterCategories:5", "afterCategories:8", "JOURNEY_MILESTONES job_portal")
+    # Job Portal closes the rail. Four categories now, not five (see CATEGORY_TITLES).
+    s = replace_once(s, "afterCategories:5", "afterCategories:4", "JOURNEY_MILESTONES job_portal")
 
     # 5 — logos his map does not carry.
     add = []
@@ -248,13 +330,44 @@ def main():
             "COMPANY_LOGOS (+%d)" % len(add),
         )
 
+    # 5b — map ids, so the journey's companies actually appear on the map.
+    #
+    # `COMPANY_IDS` maps a company name to the UUID his map placements are keyed
+    # by. It covers only six companies, and `MapViewport` renders a marker ONLY
+    # for ids in `focusCompanyIds` — so a journey company missing from this map
+    # gets no building marker, and `BuildingLink` then draws no tether at all,
+    # because it anchors on `[title="<company>"]`.
+    #
+    # Stripe is week one, so with it missing the very first thing the flow lands
+    # on had no line to its building. The ids are not invented: they are read out
+    # of his own `worldMapPoints`, which already carries Stripe and Uber. A
+    # company with no point on the map (DoorDash, Salesforce, Amplitude) is left
+    # out — it has no building in the city, and a line to nowhere is worse than
+    # no line.
+    point_ids = map_point_ids(s)
+    missing = []
+    for co in sorted({c["co"] for c in curriculum}):
+        if f"{co}:" in s[s.index("COMPANY_IDS=") : s.index("COMPANY_IDS=") + 800]:
+            continue
+        if co in point_ids:
+            missing.append(f'{co}:"{point_ids[co]}"')
+        else:
+            print(f"  note: {co} has no point on the map — no marker, no tether")
+    if missing:
+        s = replace_once(
+            s,
+            "COMPANY_IDS={Notion:",
+            "COMPANY_IDS={" + ",".join(missing) + ",Notion:",
+            "COMPANY_IDS (+%d)" % len(missing),
+        )
+
     # 6 — the camera handle.
     anchor = "function releaseCamera(){setMapCamera(null)}"
     s = replace_once(
         s,
         anchor,
-        anchor + f"{MARKER}{{flyToCompany,releaseCamera,setMapCamera}};",
-        "window.__navlab camera handle",
+        anchor + f"{MARKER}{{flyToCompany,releaseCamera,setMapCamera,roadmap:businessAnalystRoadmap}};",
+        "window.__navlab camera handle + roadmap",
     )
 
     # 7 — cosmetic.

@@ -2,78 +2,105 @@
  * First-run shell — the only styles authored for this flow.
  *
  * Card and chip appearance is NOT here: those reuse the classes already
- * compiled into his bundle stylesheet (`rounded-[42px]`, `font-stk-bureau-serif`,
- * `bg-white/10`, …) so the journey cards and his scenario card are the same
- * object. What is here is layout, the blur, and the reveal choreography.
+ * compiled into his bundle stylesheet (`rounded-[42px]`,
+ * `font-stk-bureau-serif`, `bg-white/10`, his glass `CARD_SURFACE`) so a
+ * journey card and his scenario card are the same object. What is here is
+ * layout, the blur, and the choreography.
  *
  * Everything is scoped to `#zfr` or to `html[data-zfr-beat]`, and the flow
  * removes its root and deletes that attribute when it ends — so his build is
  * left exactly as it shipped.
+ *
+ * MOTION CONTRACT
+ *   --zfr-in   decelerate, for entrances
+ *   --zfr-out  accelerate, for exits
+ * Entrances run 30-50% longer than exits. Nothing animates on opacity alone.
+ * No `filter`, `mask` or `will-change` on any ancestor of a glass card — each
+ * of those establishes a backdrop root and blanks its backdrop-filter.
  */
+#zfr {
+  --zfr-in: cubic-bezier(0.16, 1, 0.3, 1);
+  --zfr-out: cubic-bezier(0.55, 0, 1, 0.45);
+  font-family: 'Google_Sans_Flex', system-ui, sans-serif;
+}
 
-/* ── The blurred world ─────────────────────────────────────────────────────
-   A SIBLING of the stage, never its parent: an ancestor that owns
-   backdrop-filter establishes a backdrop root, which blanks the backdrop of
-   every glass card inside it. Kept behind the stage with z-index so the cards
-   sample it and appear to float on the out-of-focus world. */
+/* ── The world, and the act of blurring it ─────────────────────────────────
+   A SIBLING of the stage, never its parent. It starts CLEAR: the learner lands
+   on the sharp world they just downloaded and watches it soften, which is an
+   arrival. Starting blurred would just be a screen that was always there. */
 #zfr .zfr-blur {
   position: absolute;
   inset: 0;
   z-index: 0;
-  backdrop-filter: blur(18px) saturate(105%);
-  -webkit-backdrop-filter: blur(18px) saturate(105%);
-  /* Not black: the city stays readable underneath. This is an arrival INTO the
-     world, so hiding it would tell the wrong story. */
-  background: rgba(8, 7, 6, 0.42);
-  transition:
-    backdrop-filter 0.85s cubic-bezier(0.16, 1, 0.3, 1),
-    -webkit-backdrop-filter 0.85s cubic-bezier(0.16, 1, 0.3, 1),
-    background-color 0.85s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-/* Beat 3: focus returns. The blur and the dim come off together, which is what
-   makes the world feel like it was always there rather than newly revealed. */
-#zfr[data-beat='unblur'] .zfr-blur,
-#zfr[data-beat='settled'] .zfr-blur {
   backdrop-filter: blur(0px) saturate(100%);
   -webkit-backdrop-filter: blur(0px) saturate(100%);
   background: rgba(8, 7, 6, 0);
+  /* Long, because this is the "dramatic reveal" tier — it sets the pace for
+     everything that follows. */
+  transition:
+    backdrop-filter 900ms var(--zfr-in),
+    -webkit-backdrop-filter 900ms var(--zfr-in),
+    background-color 900ms var(--zfr-in);
+}
+#zfr[data-beat='welcome'] .zfr-blur,
+#zfr[data-beat='journey'] .zfr-blur,
+#zfr[data-beat='morph'] .zfr-blur {
+  /* Not black: the city stays legible underneath. This is an arrival INTO the
+     world, so hiding it would tell the wrong story. */
+  backdrop-filter: blur(18px) saturate(105%);
+  -webkit-backdrop-filter: blur(18px) saturate(105%);
+  background: rgba(8, 7, 6, 0.42);
 }
 
 #zfr .zfr-stage {
   position: relative;
   z-index: 1;
-  /* Column flex, not `place-items: center` grid: the journey is header +
-     scroller + CTA stacked with real gaps. Centring them as grid items let the
-     CTA land on top of the cards once the cards got tall. */
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 20px;
-  width: min(1560px, 94vw);
+  gap: 22px;
+  /* `min-width: 0` and a hard `max-width` are load-bearing, not tidying.
+     A flex item defaults to `min-width: auto`, so the card row's ~4400px of
+     content pushed this column out to 4492px inside a 1280px viewport — the
+     rail still scrolled, but the header chip and the CTA were carried far off
+     screen with it. Clamping every ancestor of the scroller is what makes the
+     overflow belong to the scroller. */
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
   max-height: 92vh;
-  font-family: 'Google_Sans_Flex', system-ui, sans-serif;
 }
-#zfr .zfr-stage.zfr-out {
+/* The welcome leaves before the journey arrives — a crossfade would smear the
+   two states through each other. Exit is faster than the entrance it makes way
+   for, per the motion contract. */
+#zfr .zfr-stage.zfr-swap {
   opacity: 0;
-  transform: translateY(14px);
-  transition: opacity 0.34s ease-out, transform 0.5s cubic-bezier(0.16, 1, 0.3, 1);
-  pointer-events: none;
+  transform: translateY(-10px);
+  transition: opacity 220ms var(--zfr-out), transform 260ms var(--zfr-out);
 }
+#zfr[data-beat='sharp'] .zfr-stage { opacity: 0; }
 #zfr[data-beat='morph'],
 #zfr[data-beat='unblur'],
+#zfr[data-beat='card'],
 #zfr[data-beat='settled'] { pointer-events: none; }
 
-/* ── Beat 1 · welcome ──────────────────────────────────────────────────────*/
+/* ── Beat 1 · welcome ──────────────────────────────────────────────────────
+   The words arrive after the blur has taken hold, one after another. */
 #zfr .zfr-welcome {
   display: grid;
   justify-items: center;
   text-align: center;
   gap: 18px;
-  animation: zfrUp 0.66s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
-#zfr .zfr-welcome h1 { margin: 6px 0 0; max-width: 20ch; }
+#zfr .zfr-welcome > * {
+  opacity: 0;
+  animation: zfrRise 620ms var(--zfr-in) forwards;
+}
+#zfr .zfr-welcome > *:nth-child(1) { animation-delay: 640ms; }
+#zfr .zfr-welcome > *:nth-child(2) { animation-delay: 760ms; }
+#zfr .zfr-welcome > *:nth-child(3) { animation-delay: 880ms; }
+#zfr .zfr-welcome h1 { margin: 0; max-width: 20ch; }
 #zfr .zfr-welcome p { margin: 0; }
 
 /* ── Beat 2 · the journey ──────────────────────────────────────────────────*/
@@ -82,52 +109,91 @@
   flex-direction: column;
   gap: 18px;
   width: 100%;
+  min-width: 0;
+  max-width: 100%;
   min-height: 0;
-  animation: zfrUp 0.58s cubic-bezier(0.16, 1, 0.3, 1) both;
+  opacity: 0;
+  animation: zfrRise 460ms var(--zfr-in) 40ms forwards;
 }
 #zfr .zfr-jhead {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  /* Aligned to the scroller's first card, not the viewport, so the title sits
-     over the cards rather than floating free of them. */
-  padding: 0 4px;
+  /* Aligned to the rail's inset so the title sits over the first card. */
+  padding: 0 var(--zfr-inset, 56px);
 }
 
-/* The carousel. Snap so a flick still lands on a card edge; the CTA pages it
-   for anyone who never scrolls. Scrollbar hidden — the clipped card at the
-   right edge is the affordance that says there is more. */
+/* Full-bleed rail with fading edges.
+   The mask lives on this WRAPPER, not on the scroller that holds the glass:
+   a mask on an ancestor of a backdrop-filter element blanks its backdrop
+   exactly the way `filter` does. One level of separation keeps both. */
+#zfr .zfr-rail {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  mask-image: linear-gradient(90deg,
+    transparent 0,
+    #000 var(--zfr-inset, 56px),
+    #000 calc(100% - var(--zfr-inset, 56px)),
+    transparent 100%);
+  -webkit-mask-image: linear-gradient(90deg,
+    transparent 0,
+    #000 var(--zfr-inset, 56px),
+    #000 calc(100% - var(--zfr-inset, 56px)),
+    transparent 100%);
+}
 #zfr .zfr-scroller {
   display: flex;
+  min-width: 0;
+  max-width: 100%;
   gap: 20px;
   overflow-x: auto;
   overflow-y: hidden;
-  /* PROXIMITY, not mandatory. Mandatory snap cancels programmatic smooth
-     scrolling — `scrollTo({behavior:'smooth'})` was silently reverted to the
-     current snap point, so the CTA could never reach the end of the journey.
-     Proximity still tidies up a manual flick without fighting the pager. */
+  /* Proximity, not mandatory: mandatory snap fights any programmatic scroll and
+     makes a trackpad flick feel notched. */
   scroll-snap-type: x proximity;
+  /* Snap aligns to the SCROLLPORT edge, not the padding box, so without this
+     the first card snapped flush to the left and sat inside the edge fade —
+     the one card that must be legible, half dissolved. */
+  scroll-padding-left: var(--zfr-inset, 56px);
   scrollbar-width: none;
-  padding: 4px 4px 8px;
-  /* No `will-change` here — it would blank every card's backdrop-filter. */
+  padding: 6px var(--zfr-inset, 56px) 10px;
 }
 #zfr .zfr-scroller::-webkit-scrollbar { display: none; }
 
 #zfr .zfr-card {
   width: 420px;
-  /* Capped against the viewport, not a fixed height: the header and the CTA
-     have to fit above and below it on a laptop screen. */
   min-height: 360px;
   height: 54vh;
   max-height: 520px;
+  padding: 26px;
   scroll-snap-align: start;
+  /* Cards arrive from the right, in order, so the rail reads as a sequence
+     laying itself out rather than a grid appearing. Delays are set in JS from
+     the card count so the whole cascade stays inside the 500ms budget. */
+  opacity: 0;
+  animation: zfrCardIn 380ms var(--zfr-in) forwards;
+}
+#zfr .zfr-cat { align-self: flex-start; max-width: 46%; text-align: right; line-height: 1.25; }
+
+/* Morph: chrome goes first, then the cards sink away under their own marks. */
+#zfr .zfr-stage.zfr-chrome-out .zfr-jhead,
+#zfr .zfr-stage.zfr-chrome-out .zfr-bar {
+  opacity: 0;
+  transform: translateY(-8px);
+  transition: opacity 160ms var(--zfr-out), transform 200ms var(--zfr-out);
+}
+#zfr .zfr-stage.zfr-cards-out .zfr-card {
+  opacity: 0;
+  transform: translateY(38px) scale(0.965);
+  animation: none;
+  transition: opacity 300ms var(--zfr-out), transform 380ms var(--zfr-out);
 }
 
 /* ── The CTA ───────────────────────────────────────────────────────────────*/
 #zfr .zfr-bar { display: grid; justify-items: center; }
 #zfr .zfr-cta {
-  margin-top: 4px;
   border: 0;
   cursor: pointer;
   border-radius: 999px;
@@ -137,73 +203,92 @@
   font-family: inherit;
   font-size: 17px;
   font-weight: 500;
-  transition: transform 0.2s ease;
+  transition: transform 140ms var(--zfr-in);
 }
-#zfr .zfr-welcome .zfr-cta { margin-top: 20px; }
 #zfr .zfr-cta:hover { transform: scale(1.03); }
 #zfr .zfr-cta:active { transform: scale(0.99); }
 
-/* ── His chrome, held back and then handed over ────────────────────────────
-   Hidden with opacity/visibility rather than `display`, because the morph has
-   to MEASURE the dock's chip positions before it is visible in order to fly
-   anything into them. */
-html[data-zfr-beat] nav[aria-label$='timeline'],
-html[data-zfr-beat] div[class*='right-[90px]'][class*='z-30'],
-html[data-zfr-beat] svg[class*='z-[29]'] {
-  transition: opacity 0.7s cubic-bezier(0.16, 1, 0.3, 1),
-              transform 0.7s cubic-bezier(0.16, 1, 0.3, 1);
+/* ── Type his build never compiled ─────────────────────────────────────────
+ * Tailwind only emits the arbitrary values a codebase actually uses, so
+ * reusing his classes works only for sizes HE used. `text-[74px]`, `p-[26px]`
+ * and `leading-[1.06]` are not in his stylesheet — a class that does not exist
+ * fails silently and the heading renders at body size. These live here.
+ */
+#zfr .zfr-h1 { font-size: 68px; line-height: 1.02; }
+#zfr .zfr-h2 { font-size: 46px; line-height: 1; margin: 0; }
+#zfr .zfr-brief { font-size: 31px; line-height: 1.08; }
+
+/* The manager avatar stacks its initial and its photo in one grid cell, so the
+   portrait covers the letter when it loads and the letter survives when it
+   does not. */
+#zfr .zfr-av > * { grid-area: 1 / 1; }
+#zfr .zfr-av img { width: 100%; height: 100%; object-fit: cover; }
+
+/* ── His chrome: held back, then handed over in order ──────────────────────
+   Hidden with opacity rather than `display`, because the morph has to MEASURE
+   chip positions before they are visible in order to fly anything onto them.
+   `!important` because framer-motion animates opacity as an INLINE style on
+   the card and tether subtrees, and a stylesheet rule loses to that. */
+html[data-zfr-beat] nav[aria-label$='timeline'] {
+  transition: opacity 620ms cubic-bezier(0.16, 1, 0.3, 1),
+              transform 620ms cubic-bezier(0.16, 1, 0.3, 1);
 }
+html[data-zfr-beat='sharp'] nav[aria-label$='timeline'],
 html[data-zfr-beat='welcome'] nav[aria-label$='timeline'],
-html[data-zfr-beat='journey'] nav[aria-label$='timeline'],
-html[data-zfr-beat='morph'] nav[aria-label$='timeline'] {
+html[data-zfr-beat='journey'] nav[aria-label$='timeline'] {
   opacity: 0 !important;
-  transform: translateY(22px);
+  transform: translateY(24px);
   pointer-events: none;
 }
-/* The card and its tether wait for the camera to arrive — landing them before
-   the flight would mean pointing a line at a building that is still moving. */
+/* During `morph` the dock is deliberately NOT hidden: it fades up underneath
+   the travelling marks so each one lands on a chip that already exists. */
+
+/* The card waits for the camera to arrive — landing it mid-flight would point
+   a line at a building that is still moving. */
+html[data-zfr-beat='sharp'] div[class*='right-[90px]'][class*='z-30'],
 html[data-zfr-beat='welcome'] div[class*='right-[90px]'][class*='z-30'],
 html[data-zfr-beat='journey'] div[class*='right-[90px]'][class*='z-30'],
 html[data-zfr-beat='morph'] div[class*='right-[90px]'][class*='z-30'],
 html[data-zfr-beat='unblur'] div[class*='right-[90px]'][class*='z-30'] {
-  /* !important because framer-motion animates `opacity` as an INLINE style on
-     this subtree; a stylesheet rule loses to it every time. */
   opacity: 0 !important;
-  transform: scale(0.94);
-  pointer-events: none;
+  transform: translateY(12px) scale(0.94);
 }
+html[data-zfr-beat='card'] div[class*='right-[90px]'][class*='z-30'],
+html[data-zfr-beat='settled'] div[class*='right-[90px]'][class*='z-30'] {
+  opacity: 1 !important;
+  transform: none;
+  transition: opacity 430ms cubic-bezier(0.16, 1, 0.3, 1),
+              transform 520ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* The line is last — but HIS component draws it, not this one.
+ *
+ * `BuildingLink` solves its path from the scenario card's rect and the map
+ * marker, re-tracking for a beat after any map transform, then stops. Holding
+ * it hidden past the card's arrival meant it solved nothing while there was
+ * nothing to solve for, gave up, and rendered no path at all — the SVG stayed
+ * empty even once released.
+ *
+ * So the hold ends the moment the card lands. From there his own
+ * `pathLength: 0 -> 1` draw runs, which is the animation this beat wanted in
+ * the first place: the line reaches out to the building only once there is a
+ * card for it to reach from. Trying to drive it from here produced a worse
+ * version of something he had already built.
+ */
+html[data-zfr-beat='sharp'] svg[class*='z-[29]'],
 html[data-zfr-beat='welcome'] svg[class*='z-[29]'],
 html[data-zfr-beat='journey'] svg[class*='z-[29]'],
 html[data-zfr-beat='morph'] svg[class*='z-[29]'],
 html[data-zfr-beat='unblur'] svg[class*='z-[29]'] { opacity: 0 !important; }
 
-@keyframes zfrUp {
+@keyframes zfrRise {
   from { opacity: 0; transform: translateY(20px); }
   to   { opacity: 1; transform: none; }
 }
-
-@media (prefers-reduced-motion: reduce) {
-  #zfr, #zfr *,
-  html[data-zfr-beat] nav[aria-label$='timeline'],
-  html[data-zfr-beat] div[class*='right-[90px]'][class*='z-30'] {
-    animation: none !important;
-    transition: none !important;
-  }
-  #zfr .zfr-scroller { scroll-behavior: auto; }
+@keyframes zfrCardIn {
+  from { opacity: 0; transform: translateX(46px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
 }
-
-/* ── Type and padding his build never compiled ─────────────────────────────
- * Tailwind only emits the arbitrary values a codebase actually uses, so
- * reusing his classes works only for sizes HE used. `text-[74px]`, `p-[26px]`,
- * `leading-[1.06]` and `leading-[1.02]` are not in his stylesheet — a class
- * that does not exist fails silently and the heading renders at body size,
- * which is exactly how the first pass looked. These four live here instead.
- * Everything else on the cards still uses his compiled classes.
- */
-#zfr .zfr-h1 { font-size: 68px; line-height: 1.02; margin: 6px 0 0; max-width: 20ch; }
-#zfr .zfr-h2 { font-size: 46px; line-height: 1; margin: 0; }
-#zfr .zfr-brief { font-size: 31px; line-height: 1.08; }
-#zfr .zfr-card { padding: 26px; }
 
 @media (max-height: 820px) {
   #zfr .zfr-h1 { font-size: 54px; }
@@ -211,9 +296,20 @@ html[data-zfr-beat='unblur'] svg[class*='z-[29]'] { opacity: 0 !important; }
   #zfr .zfr-card { height: 56vh; min-height: 330px; }
   #zfr .zfr-brief { font-size: 27px; }
 }
+@media (max-width: 900px) { #zfr { --zfr-inset: 28px; } }
 
-/* The manager avatar stacks its initial and its photo in one grid cell, so the
-   portrait covers the letter when it loads and the letter survives when it
-   does not. */
-#zfr .zfr-av > * { grid-area: 1 / 1; }
-#zfr .zfr-av img { width: 100%; height: 100%; object-fit: cover; }
+@media (prefers-reduced-motion: reduce) {
+  #zfr, #zfr *,
+  html[data-zfr-beat] nav[aria-label$='timeline'],
+  html[data-zfr-beat] div[class*='right-[90px]'][class*='z-30'],
+  html[data-zfr-beat] svg[class*='z-[29]'] {
+    animation: none !important;
+    transition: none !important;
+  }
+  /* Entrances that rely on an animation to become visible need their end state
+     stated outright, or reduced motion leaves them at opacity 0 forever. */
+  #zfr .zfr-welcome > *,
+  #zfr .zfr-journey,
+  #zfr .zfr-card { opacity: 1 !important; transform: none !important; }
+  #zfr .zfr-scroller { scroll-behavior: auto; }
+}
