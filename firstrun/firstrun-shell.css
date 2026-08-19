@@ -171,14 +171,24 @@
      the one card that must be legible, half dissolved. */
   scroll-padding-left: var(--zfr-inset, 56px);
   scrollbar-width: none;
-  /* The vertical padding is structural, not spacing.
-     `overflow-x: auto` forces the cross axis to clip, and the group's box was
-     landing EXACTLY on that clip line — top and bottom flush to the pixel. A
-     54px corner radius sitting on the boundary gets shaved into a flat edge,
-     which read as a crop straight across the bottom of every container. The
-     padding moves the clip line away from the corners; the header and CTA gave
-     up the equivalent space above and below so the column still fits. */
-  padding: 14px var(--zfr-inset, 56px) 18px;
+  /* ── The bleed. Structural, not spacing. Do not "tidy" these numbers. ──
+     `overflow-x: auto` forces the cross axis to clip, and TWO different things
+     were being severed by that clip line:
+
+       1. the group's 54px corner radius, when its box sat flush to the line;
+       2. and the real culprit behind the band that survived that first fix —
+          every card carries his CARD_SURFACE shadow,
+          `0 44px 90px -24px rgba(0,0,0,0.5)`, which falls roughly 65px BELOW
+          the card. With the line only 18px down, the shadow was guillotined
+          mid-falloff: darkened above, abruptly clean below, across the full
+          width. That hard edge IS the "crop" — moving the line 18px only moved
+          the band.
+
+     So the padding is large enough for the shadow to finish falling off inside
+     the clip box, and negative margins pull the layout back to the same optical
+     spacing (net 14px above, 18px below) so nothing on screen shifts. */
+  padding: 80px var(--zfr-inset, 56px) 96px;
+  margin: -66px 0 -78px;
 }
 #zfr .zfr-scroller::-webkit-scrollbar { display: none; }
 

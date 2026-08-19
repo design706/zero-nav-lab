@@ -89,12 +89,17 @@ animates on opacity alone.
   Dropped into `<img src="data:image/svg+xml…">` they are documents, and without
   the namespace they fail silently — `complete` true, `naturalWidth` 0, broken
   glyph. `patch-bundle.py` injects it.
-- **A rounded box flush with a clip line loses its corners.** `overflow-x: auto`
-  forces the cross axis to clip, and the group's box landed exactly on that
-  boundary — a 54px radius sitting on the clip line got shaved into a flat edge
-  that read as a crop across the bottom of every container. The scroller carries
-  vertical padding so the clip line stays off the corners; the header and CTA
-  gave up the equivalent space so the column still fits.
+- **A clip line severs SHADOWS, not just corners — and that is what a stray
+  "crop" band usually is.** `overflow-x: auto` forces the cross axis to clip.
+  Two separate things were being cut at that line: the group's 54px corner
+  radius when its box sat flush to it, and — the one that survived the first
+  fix — each card's `CARD_SURFACE` shadow, `0 44px 90px -24px`, which falls
+  **65px** below the card. With only 34px of room the shadow was guillotined
+  mid-falloff: darkened above the line, abruptly clean below, full width. The
+  scroller now bleeds (`padding: 80px … 96px` with `margin: -66px 0 -78px`) so
+  the shadow finishes inside the clip box while the layout contributes exactly
+  the same space as before. Measure `cardBottom → clipLine ≥ shadow extent`
+  before believing a band is fixed.
 - **Kill fixed card heights in every rule, including the media query.** The base
   rule lost `height: 54vh` but `@media (max-height: 820px)` still set `56vh`, so
   every card measured exactly 403px and the last line of "you hand in" stayed
