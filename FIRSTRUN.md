@@ -89,22 +89,23 @@ animates on opacity alone.
   Dropped into `<img src="data:image/svg+xml…">` they are documents, and without
   the namespace they fail silently — `complete` true, `naturalWidth` 0, broken
   glyph. `patch-bundle.py` injects it.
-- **A closed hairline outline on a container reads as a CROP.** The journey's
-  group carried `inset 0 0 0 1px rgba(255,255,255,0.07)`. Over the dark blurred
-  map, the run of that ring below the cards looked like a hard horizontal cut
-  across the full width — reported three times, and survived three wrong fixes
-  (card heights, corner radius on the clip line, card shadows being clipped).
-  The container now gets its presence from a top-weighted gradient fill and an
-  inset shade pulled off the bottom by a negative spread, so it has no boundary
-  anywhere for the eye to read as a cut. **Never reintroduce a full-perimeter
-  border/ring/outline on a container that floats over the map.**
-- **Bisect artifacts, don't theorise about them.** Each wrong fix above came
-  from reasoning about what *should* cause a band. What actually found it: keep
-  the page at a viewport where the artifact is legible (a screenshot at half
-  scale hid it and produced a false "still there"), then toggle ONE suspect at
-  a time in the console — mask, card shadow, group fill, group ring, blur
-  layer, the app itself — until it disappears, and confirm by toggling that
-  suspect on alone.
+- **TWO ancestors clip the card row, and both must bleed.** The journey cards
+  carry his `CARD_SURFACE` shadow, which falls **65px** below each card. Two
+  separate things cut it at the same height: `.zfr-scroller`'s `overflow-x: auto`
+  (which forces the cross axis to clip) and `.zfr-rail`'s `mask-image` (a mask
+  clips painting to its own box). A guillotined soft shadow is a hard line
+  across the full width — the "crop" reported four times. Both elements now
+  bleed `80px/96px` with a matching negative margin, so the shadow lands inside
+  both clip boxes while the layout contributes exactly the space it did before.
+  **Fixing one clipper alone changes nothing on screen**, because the other
+  still cuts in the identical place — which is what made this look unfixable.
+- **Find artifacts by making them loud, then bisect.** Three wrong diagnoses
+  came from reasoning about what *should* cause a band. What actually found it,
+  in minutes: paint the suspect a solid opaque colour (card shadow → bright
+  red) so its true extent and its cut are unmissable, then walk up the ancestor
+  chain toggling one clipper at a time and read off which `bottom` coordinate
+  the cut sits on. A dark shadow on a dark map at half-scale is invisible —
+  never judge this class of bug from a scaled screenshot.
 - **Kill fixed card heights in every rule, including the media query.** The base
   rule lost `height: 54vh` but `@media (max-height: 820px)` still set `56vh`, so
   every card measured exactly 403px and the last line of "you hand in" stayed

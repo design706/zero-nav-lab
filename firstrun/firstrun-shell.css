@@ -144,6 +144,15 @@
   width: 100%;
   min-width: 0;
   max-width: 100%;
+  /* ── CLIPPER #1: the mask. Bleed vertically or it severs the card shadows. ──
+     `mask-image` clips this element's painting to its own box, so anything the
+     cards paint below that box — their shadows — is cut dead flat across the
+     full width. That hard line is the "crop" reported four times.
+     The padding pushes the mask box past the shadow's reach; the negative
+     margin gives the space back so nothing moves. Vertical only: the gradient
+     is 90deg, so the horizontal fade geometry is untouched. */
+  padding: 80px 0 96px;
+  margin: -80px 0 -96px;
   mask-image: linear-gradient(90deg,
     transparent 0,
     #000 var(--zfr-inset, 56px),
@@ -171,12 +180,13 @@
      the one card that must be legible, half dissolved. */
   scroll-padding-left: var(--zfr-inset, 56px);
   scrollbar-width: none;
-  /* Vertical padding keeps the group's rounded corners off the clip line that
-     `overflow-x: auto` forces on the cross axis. Small on purpose: a much
-     larger bleed was tried here to stop the card shadows being clipped, and it
-     changed nothing on screen — the band it was chasing came from the group's
-     own outline (see .zfr-group). */
-  padding: 14px var(--zfr-inset, 56px) 18px;
+  /* ── CLIPPER #2: overflow. Must bleed TOO. ──
+     `overflow-x: auto` forces the cross axis to clip here. This and the rail's
+     mask are SEPARATE clippers at the same height — bleeding only one leaves
+     the other still cutting the shadows in exactly the same place, which is
+     why two earlier attempts looked like they had changed nothing. */
+  padding: 80px var(--zfr-inset, 56px) 96px;
+  margin: -80px 0 -96px;
 }
 #zfr .zfr-scroller::-webkit-scrollbar { display: none; }
 
@@ -215,29 +225,10 @@
   flex: 0 0 auto;
   padding: 16px;
   border-radius: 54px;
-  /* ── NO CLOSED OUTLINE ON THIS CONTAINER. This is the fix for the band. ──
-     It carried `inset 0 0 0 1px rgba(255,255,255,0.07)` — a 1px hairline ring
-     around the whole box. Over the dark blurred map, the run of that ring
-     BELOW the cards read as a hard horizontal line across the full width: the
-     "crop" reported three times. It was not the card heights, not the corner
-     radius meeting the clip line, and not the card shadows being clipped —
-     each of those was fixed in turn and the band stayed. Toggling this single
-     ring off removes it completely; toggling the ring on ALONE reproduces it
-     exactly.
-
-     So the container gets its presence from tone instead of an edge: a fill
-     weighted to the top that dissolves toward the bottom, and an inset shade
-     pulled off the bottom edge by a negative spread. The group still reads as
-     a group (with its label) and has no boundary anywhere for the eye to catch
-     as a cut. Do not reintroduce a full-perimeter border, ring or outline
-     here. */
-  background: linear-gradient(
-    180deg,
-    rgba(255, 255, 255, 0.058) 0%,
-    rgba(255, 255, 255, 0.022) 55%,
-    rgba(255, 255, 255, 0.006) 100%
-  );
-  box-shadow: inset 0 16px 30px -14px rgba(0, 0, 0, 0.3);
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.07),
+    inset 0 12px 34px rgba(0, 0, 0, 0.22);
   scroll-snap-align: start;
   opacity: 0;
   animation: zfrCardIn 380ms var(--zfr-in) forwards;
