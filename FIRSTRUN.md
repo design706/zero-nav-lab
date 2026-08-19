@@ -89,17 +89,22 @@ animates on opacity alone.
   Dropped into `<img src="data:image/svg+xml…">` they are documents, and without
   the namespace they fail silently — `complete` true, `naturalWidth` 0, broken
   glyph. `patch-bundle.py` injects it.
-- **A clip line severs SHADOWS, not just corners — and that is what a stray
-  "crop" band usually is.** `overflow-x: auto` forces the cross axis to clip.
-  Two separate things were being cut at that line: the group's 54px corner
-  radius when its box sat flush to it, and — the one that survived the first
-  fix — each card's `CARD_SURFACE` shadow, `0 44px 90px -24px`, which falls
-  **65px** below the card. With only 34px of room the shadow was guillotined
-  mid-falloff: darkened above the line, abruptly clean below, full width. The
-  scroller now bleeds (`padding: 80px … 96px` with `margin: -66px 0 -78px`) so
-  the shadow finishes inside the clip box while the layout contributes exactly
-  the same space as before. Measure `cardBottom → clipLine ≥ shadow extent`
-  before believing a band is fixed.
+- **A closed hairline outline on a container reads as a CROP.** The journey's
+  group carried `inset 0 0 0 1px rgba(255,255,255,0.07)`. Over the dark blurred
+  map, the run of that ring below the cards looked like a hard horizontal cut
+  across the full width — reported three times, and survived three wrong fixes
+  (card heights, corner radius on the clip line, card shadows being clipped).
+  The container now gets its presence from a top-weighted gradient fill and an
+  inset shade pulled off the bottom by a negative spread, so it has no boundary
+  anywhere for the eye to read as a cut. **Never reintroduce a full-perimeter
+  border/ring/outline on a container that floats over the map.**
+- **Bisect artifacts, don't theorise about them.** Each wrong fix above came
+  from reasoning about what *should* cause a band. What actually found it: keep
+  the page at a viewport where the artifact is legible (a screenshot at half
+  scale hid it and produced a false "still there"), then toggle ONE suspect at
+  a time in the console — mask, card shadow, group fill, group ring, blur
+  layer, the app itself — until it disappears, and confirm by toggling that
+  suspect on alone.
 - **Kill fixed card heights in every rule, including the media query.** The base
   rule lost `height: 54vh` but `@media (max-height: 820px)` still set `56vh`, so
   every card measured exactly 403px and the last line of "you hand in" stayed
