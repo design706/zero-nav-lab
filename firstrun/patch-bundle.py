@@ -52,7 +52,12 @@ WHAT IS PATCHED, AND WHY EACH ONE
    better than post-hoc DOM fixing: the chips, the scenario card and any future
    surface all resolve the logo through the same lookup he already wrote.
 
-6. `window.__navlab` — the camera handle, plus the roadmap itself.
+6. `window.__navlab` — the camera handle, the roadmap, and the journey
+   selection. The selection matters as much as the camera: while a journey node
+   is selected his pan animation locks the map to that company at END_ZOOM, so
+   `setMapCamera` silently does nothing. Holding the wide shot means clearing
+   the selection first and restoring it when the descent begins — which is also
+   what brings his scenario card and tether back, since both are driven by it.
    `flyToCompany` / `releaseCamera` are module-scoped with no window bridge and
    no CustomEvent, so an overlay cannot drive the map without this insertion.
    `roadmap` is exposed alongside them so the overlay's cards can read their
@@ -402,8 +407,13 @@ def main():
     s = replace_once(
         s,
         anchor,
-        anchor + f"{MARKER}{{flyToCompany,releaseCamera,setMapCamera,roadmap:businessAnalystRoadmap}};",
-        "window.__navlab camera handle + roadmap",
+        anchor + f"{MARKER}{{flyToCompany,releaseCamera,setMapCamera,roadmap:businessAnalystRoadmap,"
+        f"clearJourneySelection,selectJourneyNode,getJourneySelection:getSnapshot$2}};",
+        "window.__navlab camera + roadmap + journey selection",
+        # The selection handles are exposed but NOT used by the flow today:
+        # clearing the selection does not release his camera during the intro
+        # (see pinWorldView in firstrun.js). Kept because they are the hook a
+        # proper wide-shot fix would need.
     )
 
     # 7 — cosmetic.

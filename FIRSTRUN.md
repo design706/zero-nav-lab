@@ -10,10 +10,10 @@ components were rewritten — the flow drives them.
 
 | | |
 |---|---|
-| **1 · welcome** | Lands on the **sharp** world, blurs it, *then* speaks. "Welcome to Zero, Ada." / "We've mapped out your journey." / **Next** |
+| **1 · welcome** | Lands on the **sharp** world pulled all the way out to the **whole city**, blurs it, *then* speaks. "Welcome to Zero, Ada." / "We've mapped out your journey." / **Next** |
 | **2 · journey** | Title banded across the top, CTA pinned at the bottom, city visible between. The twelve weeks as glass cards **grouped inside labelled category containers**, staggered in left→right on a full-bleed rail with fading edges. Free scroll. One CTA: **Let's begin** |
 | **3 · morph** | Each card's mark flies **on an arc** onto its own dock chip while the groups sink and the dock fades up underneath, then the world comes back into focus |
-| **4 · landing** | Camera flies into week one's building → the card lands as the city settles → his tether draws the line |
+| **4 · landing** | The blur clears on the wide city, *then* the camera descends into week one's building → the card lands as the city settles → his tether draws the line |
 
 The blur is an *event*, not a backdrop: a modal is something you dismiss, and
 the world behind it is scenery. Blurring the actual world says you are already
@@ -106,6 +106,20 @@ animates on opacity alone.
   chain toggling one clipper at a time and read off which `bottom` coordinate
   the cut sits on. A dark shadow on a dark map at half-scale is invisible —
   never judge this class of bug from a scaled screenshot.
+- **His camera is not inert — it is slow, and it must not be interrupted.**
+  `setMapCamera({fx: .5, fy: .5, z: 1})` gives the wide shot, but it writes an
+  eased transform that takes about a second to arrive, so a read taken straight
+  after the call still shows his resting `scale(3.5)` and the API looks dead.
+  Worse, asking again *while the move is in flight* restarts it from wherever it
+  had got to **and** restarts the map holder's 1200ms fade-in — which is how the
+  entire city ends up sitting at `opacity: 0.0008` over a grey void. So: wait
+  for his boot to finish (holder opacity > 0.95), ask **once**, then poll
+  `--map-zoom` until it lands. Never assert the camera on a timer.
+- **A hidden tab stalls every transition.** The Browser pane reports
+  `document.hidden: true` even when fronted, so CSS transitions freeze
+  mid-flight and screenshots show a half-faded map that looks like a bug in the
+  flow. A click wakes the compositor. Read `document.hidden` before believing a
+  stuck animation is yours.
 - **Kill fixed card heights in every rule, including the media query.** The base
   rule lost `height: 54vh` but `@media (max-height: 820px)` still set `56vh`, so
   every card measured exactly 403px and the last line of "you hand in" stayed

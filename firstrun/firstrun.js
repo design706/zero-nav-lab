@@ -331,6 +331,71 @@
     }).onfinish = function () { clone.remove(); };
   }
 
+  /* The camera: hold the world wide while the copy reads, then descend.
+   *
+   * His `setMapCamera` DOES accept a waypoint during the intro — it just does
+   * not land instantly. It writes `--map-zoom` and an eased transform onto the
+   * map layer and the move takes ~1.2s, so a read taken right after the call
+   * still shows his default framing (scale 3.5). That is what made this look
+   * inert for so long. Ask once, then let it arrive.
+   *
+   * The one thing that must not happen is asking every frame — repeated
+   * waypoints restart his pan and hold the map layer faded almost to nothing.
+   * So the hold below re-asserts ONLY when his own boot pan has pulled the
+   * zoom back in, which is at most a call or two. */
+  var WIDE = { fx: 0.5, fy: 0.5, z: 1 };
+
+  function mapLayer() { return document.querySelector('.relative.w-full.h-full'); }
+  function mapHolder() { return document.querySelector('.absolute.inset-0.overflow-hidden'); }
+
+  /* His map arrives in two acts: the holder fades up over 1200ms, and the layer
+     eases to its resting framing (scale 3.5). A camera waypoint asked for
+     DURING that restarts both — the ease starts over from wherever it had got
+     to, and the fade restarts with it, which is why an early ask leaves the
+     whole city sitting at opacity 0.0008 and the zoom creeping. Asking on a
+     timer makes it permanent: every tick restarts it again.
+     So: wait for his boot to finish, then ask exactly once. */
+  function waitForMapSettled(timeout) {
+    var t0 = Date.now();
+    return new Promise(function (resolve) {
+      var id = setInterval(function () {
+        var h = mapHolder();
+        var op = h ? parseFloat(getComputedStyle(h).opacity) : 0;
+        if (op > 0.95 || Date.now() - t0 > timeout) { clearInterval(id); resolve(); }
+      }, 100);
+    });
+  }
+
+  function pinWorldView() {
+    try {
+      if (window.__navlab && window.__navlab.setMapCamera) window.__navlab.setMapCamera(WIDE);
+    } catch (e) {}
+  }
+
+  /* And the wide shot has to be waited for, not assumed — his move is eased
+     over about a second, so a read taken right after the ask still shows 3.5.
+     That delay is what made this look inert for so long. */
+  function waitForWide(timeout) {
+    var t0 = Date.now();
+    return new Promise(function (resolve) {
+      var id = setInterval(function () {
+        var layer = mapLayer();
+        var z = layer ? parseFloat(layer.style.getPropertyValue('--map-zoom')) : NaN;
+        if (z <= 1.05 || Date.now() - t0 > timeout) { clearInterval(id); resolve(); }
+      }, 80);
+    });
+  }
+
+  /* The descent out of the wide shot and into week one's building. Releasing
+     the hold first is what lets his flight keep the ground it gains. */
+  function descendToFirstStop() {
+    try {
+      if (window.__navlab && window.__navlab.flyToCompany) {
+        window.__navlab.flyToCompany(CURRICULUM[0].co);
+      }
+    } catch (e) { /* a missing marker must never strand the flow */ }
+  }
+
   /* ── The flow ─────────────────────────────────────────────────────────────*/
   var root, blur, stage, cards = [];
 
@@ -427,12 +492,13 @@
           second: the navigation has to visibly exist before the map sharpens,
           or the unblur steals the moment the morph just earned. */
     setBeat('unblur');
-    await wait(700);
+    /* Long enough for the 900ms unblur to actually finish. The descent is its
+       own beat — the world sharpens first, THEN the camera drops into the
+       building. Overlapping them made the zoom read as part of the unblur. */
+    await wait(940);
 
     /* 4. Landing, strictly in order. His camera animator runs ~1s. */
-    try {
-      if (window.__navlab && window.__navlab.flyToCompany) window.__navlab.flyToCompany(CURRICULUM[0].co);
-    } catch (e) { /* a missing map marker must never strand the flow */ }
+    descendToFirstStop();
 
     /* 5. The card arrives while the city is still settling — not after it has
           stopped. That is deliberate and load-bearing: his `BuildingLink` only
@@ -505,11 +571,11 @@
     root.appendChild(stage);
     document.body.appendChild(root);
 
-    /* Start where a first-time learner starts: the whole world in frame. */
-    try { if (window.__navlab && window.__navlab.releaseCamera) window.__navlab.releaseCamera(); } catch (e) {}
-
     /* …and make sure there IS a world before performing the blur on it. */
     await waitForMap(12000);
+    await waitForMapSettled(4000);
+    pinWorldView();
+    await waitForWide(2200);
 
     var w = mk('div', 'zfr-welcome');
     /* No eyebrow. "WELCOME TO ZERO" above "Welcome to Zero, Ada." said the same
