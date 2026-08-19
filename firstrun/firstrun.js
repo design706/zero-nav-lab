@@ -330,12 +330,27 @@
     if (!dock) return;                    // no dock, no flow — leave his lab alone
 
     root = mk('div'); root.id = 'zfr';
-    /* Geometry inline: his bundle paints inside a transformed wrapper, which
-       becomes the containing block for `position: fixed`, so a stylesheet
-       `inset:0` resolves against a zero-sized box. */
+    /* Geometry inline and MEASURED, not `100vw/100vh`.
+     *
+     * Two problems with viewport units here. His bundle paints inside a
+     * transformed wrapper, which becomes the containing block for any
+     * `position: fixed` descendant, so `inset: 0` cannot be trusted on its own.
+     * And a `vw`/`vh` box is resolved once at boot — if the window is resized,
+     * or the tab is restored from a background state where the viewport
+     * momentarily reads small, the overlay keeps the stale size forever and
+     * renders as a box in the corner.
+     *
+     * `documentElement.clientWidth/Height` is the honest number, and re-reading
+     * it on resize keeps the flow full-bleed for the whole session. */
+    var fit = function () {
+      var d = document.documentElement;
+      root.style.width = (window.innerWidth || d.clientWidth) + 'px';
+      root.style.height = (window.innerHeight || d.clientHeight) + 'px';
+    };
     root.style.cssText =
-      'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:9000;' +
-      'display:grid;place-items:center;';
+      'position:fixed;top:0;left:0;z-index:9000;display:grid;place-items:center;';
+    fit();
+    addEventListener('resize', fit);
 
     /* SIBLING of the stage, never its parent — an ancestor owning
        backdrop-filter blanks the backdrop of every glass card inside it. */
