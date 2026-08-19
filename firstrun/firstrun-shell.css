@@ -55,25 +55,21 @@
 #zfr .zfr-stage {
   position: relative;
   z-index: 1;
+  /* Full height, three bands: header pinned top, rail centred in what is left,
+     CTA near the bottom. Atul's arrangement — the title stops sitting on the
+     cards, and the city shows through above and below the rail. */
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 22px;
-  /* `min-width: 0` and a hard `max-width` are load-bearing, not tidying.
-     A flex item defaults to `min-width: auto`, so the card row's ~4400px of
-     content pushed this column out to 4492px inside a 1280px viewport — the
-     rail still scrolled, but the header chip and the CTA were carried far off
-     screen with it. Clamping every ancestor of the scroller is what makes the
-     overflow belong to the scroller. */
   width: 100%;
   min-width: 0;
   max-width: 100%;
-  max-height: 92vh;
+  height: 100%;
 }
-/* The welcome leaves before the journey arrives — a crossfade would smear the
-   two states through each other. Exit is faster than the entrance it makes way
-   for, per the motion contract. */
+/* The welcome is the one beat that is centred rather than banded. */
+#zfr[data-beat='sharp'] .zfr-stage,
+#zfr[data-beat='welcome'] .zfr-stage { justify-content: center; gap: 22px; }
+
 #zfr .zfr-stage.zfr-swap {
   opacity: 0;
   transform: translateY(-10px);
@@ -107,10 +103,10 @@
 #zfr .zfr-journey {
   display: flex;
   flex-direction: column;
-  gap: 18px;
   width: 100%;
   min-width: 0;
   max-width: 100%;
+  height: 100%;
   min-height: 0;
   opacity: 0;
   animation: zfrRise 460ms var(--zfr-in) 40ms forwards;
@@ -120,8 +116,24 @@
   align-items: center;
   justify-content: space-between;
   gap: 24px;
-  /* Aligned to the rail's inset so the title sits over the first card. */
-  padding: 0 var(--zfr-inset, 56px);
+  flex: 0 0 auto;
+  padding: clamp(26px, 5vh, 54px) var(--zfr-inset, 56px) 0;
+}
+/* The rail takes the space between the header and the CTA and centres itself
+   in it, so the cards sit in the middle of the screen rather than under the
+   title. */
+#zfr .zfr-rail-wrap {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+#zfr .zfr-bar {
+  flex: 0 0 auto;
+  display: grid;
+  justify-items: center;
+  padding-bottom: clamp(22px, 4.5vh, 46px);
 }
 
 /* Full-bleed rail with fading edges.
@@ -145,6 +157,7 @@
 }
 #zfr .zfr-scroller {
   display: flex;
+  align-items: center;
   min-width: 0;
   max-width: 100%;
   gap: 20px;
@@ -164,18 +177,67 @@
 
 #zfr .zfr-card {
   width: 420px;
-  min-height: 360px;
-  height: 54vh;
-  max-height: 520px;
-  padding: 26px;
+  /* NO fixed height. `height: 54vh` plus `overflow-hidden` is what clipped the
+     "you hand in" line at the bottom of the taller cards. The card is now as
+     tall as its content, and cards inside a group stretch to their tallest
+     sibling, so a category stays a tidy block without any of them being cut. */
+  min-height: 340px;
+  /* Extra slack at the bottom. `align-items: stretch` sets every card to the
+     flex line's height, and the line is measured before the webfonts settle —
+     so the tallest card's text ends up a few pixels past its own box and the
+     last line of "you hand in" gets shaved. The card owns `overflow: hidden`
+     for its 42px corners, so the shortfall has to be absorbed as space. */
+  padding: 26px 26px 34px;
   scroll-snap-align: start;
   /* Cards arrive from the right, in order, so the rail reads as a sequence
-     laying itself out rather than a grid appearing. Delays are set in JS from
-     the card count so the whole cascade stays inside the 500ms budget. */
+     laying itself out rather than a grid appearing. */
   opacity: 0;
   animation: zfrCardIn 380ms var(--zfr-in) forwards;
 }
-#zfr .zfr-cat { align-self: flex-start; max-width: 46%; text-align: right; line-height: 1.25; }
+
+/* ── Category groups ───────────────────────────────────────────────────────
+   A container per category, labelled once. Cards that share a category now
+   sit inside one block instead of being three separate cards each repeating
+   the same chip.
+
+   No `backdrop-filter`, `filter` or `mask` on this container — the glass cards
+   live inside it, and any of those on an ancestor blanks their backdrop. The
+   depth comes from an INSET shadow instead, which costs nothing. */
+#zfr .zfr-group {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  flex: 0 0 auto;
+  padding: 16px;
+  border-radius: 54px;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.07),
+    inset 0 12px 34px rgba(0, 0, 0, 0.22);
+  scroll-snap-align: start;
+  opacity: 0;
+  animation: zfrCardIn 380ms var(--zfr-in) forwards;
+}
+#zfr .zfr-glabel {
+  text-align: center;
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  padding-top: 4px;
+}
+/* `stretch` is what makes every card in a category the same height. */
+#zfr .zfr-grow {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+}
+#zfr .zfr-grow .zfr-card {
+  animation: none;      /* the group carries the entrance for its cards */
+  opacity: 1;
+  scroll-snap-align: none;
+}
+/* The two unlocks stand alone, so they carry their own entrance and align to
+   the middle of the taller groups beside them. */
+#zfr .zfr-card.zfr-solo { align-self: center; }
 
 /* Morph: chrome goes first, then the cards sink away under their own marks. */
 #zfr .zfr-stage.zfr-chrome-out .zfr-jhead,
@@ -184,6 +246,7 @@
   transform: translateY(-8px);
   transition: opacity 160ms var(--zfr-out), transform 200ms var(--zfr-out);
 }
+#zfr .zfr-stage.zfr-cards-out .zfr-group,
 #zfr .zfr-stage.zfr-cards-out .zfr-card {
   opacity: 0;
   transform: translateY(38px) scale(0.965);
@@ -192,7 +255,6 @@
 }
 
 /* ── The CTA ───────────────────────────────────────────────────────────────*/
-#zfr .zfr-bar { display: grid; justify-items: center; }
 #zfr .zfr-cta {
   border: 0;
   cursor: pointer;
@@ -242,6 +304,37 @@ html[data-zfr-beat='journey'] nav[aria-label$='timeline'] {
 }
 /* During `morph` the dock is deliberately NOT hidden: it fades up underneath
    the travelling marks so each one lands on a chip that already exists. */
+
+/* His HUD pills — streak, level, credits — are furniture for a learner with
+   history. On the welcome screen they were a smudge of blurred colour in the
+   top-right corner with nothing to say. They return with the dock. */
+html[data-zfr-beat] [aria-label='3 day streak'],
+html[data-zfr-beat] [aria-label^='Level'],
+html[data-zfr-beat] [aria-label^='Credits'],
+html[data-zfr-beat] [title='Your XP & level'] {
+  transition: opacity 620ms cubic-bezier(0.16, 1, 0.3, 1),
+              transform 620ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+html[data-zfr-beat='sharp'] [aria-label='3 day streak'],
+html[data-zfr-beat='welcome'] [aria-label='3 day streak'],
+html[data-zfr-beat='journey'] [aria-label='3 day streak'],
+html[data-zfr-beat='morph'] [aria-label='3 day streak'],
+html[data-zfr-beat='sharp'] [aria-label^='Level'],
+html[data-zfr-beat='welcome'] [aria-label^='Level'],
+html[data-zfr-beat='journey'] [aria-label^='Level'],
+html[data-zfr-beat='morph'] [aria-label^='Level'],
+html[data-zfr-beat='sharp'] [aria-label^='Credits'],
+html[data-zfr-beat='welcome'] [aria-label^='Credits'],
+html[data-zfr-beat='journey'] [aria-label^='Credits'],
+html[data-zfr-beat='morph'] [aria-label^='Credits'],
+html[data-zfr-beat='sharp'] [title='Your XP & level'],
+html[data-zfr-beat='welcome'] [title='Your XP & level'],
+html[data-zfr-beat='journey'] [title='Your XP & level'],
+html[data-zfr-beat='morph'] [title='Your XP & level'] {
+  opacity: 0 !important;
+  transform: translateY(-10px);
+  pointer-events: none;
+}
 
 /* The card waits for the camera to arrive — landing it mid-flight would point
    a line at a building that is still moving. */
@@ -293,7 +386,11 @@ html[data-zfr-beat='unblur'] svg[class*='z-[29]'] { opacity: 0 !important; }
 @media (max-height: 820px) {
   #zfr .zfr-h1 { font-size: 54px; }
   #zfr .zfr-h2 { font-size: 38px; }
-  #zfr .zfr-card { height: 56vh; min-height: 330px; }
+  /* Height stays AUTO here too. A `height: 56vh` in this block is what kept
+     clipping the cards after the base rule dropped its fixed height — every
+     card measured exactly 403px on a 720px viewport, tallest content included.
+     Only the floor shrinks on a short screen. */
+  #zfr .zfr-card { min-height: 300px; }
   #zfr .zfr-brief { font-size: 27px; }
 }
 @media (max-width: 900px) { #zfr { --zfr-inset: 28px; } }
@@ -310,6 +407,7 @@ html[data-zfr-beat='unblur'] svg[class*='z-[29]'] { opacity: 0 !important; }
      stated outright, or reduced motion leaves them at opacity 0 forever. */
   #zfr .zfr-welcome > *,
   #zfr .zfr-journey,
+  #zfr .zfr-group,
   #zfr .zfr-card { opacity: 1 !important; transform: none !important; }
   #zfr .zfr-scroller { scroll-behavior: auto; }
 }

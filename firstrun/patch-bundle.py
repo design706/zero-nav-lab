@@ -143,13 +143,24 @@ def load_curriculum():
 
 
 def load_logo(name):
-    """One company SVG out of ZFR_LOGO, as a data URI."""
+    """One company SVG out of ZFR_LOGO, as a data URI.
+
+    The xmlns injection is load-bearing, not hygiene. These SVGs were authored
+    for INLINE injection, where the HTML parser supplies the namespace — so
+    most of them omit `xmlns`. An `<img src="data:image/svg+xml...">` is a
+    STANDALONE SVG document, and without the namespace the browser refuses to
+    render it: `img.complete` goes true with `naturalWidth === 0`, and the chip
+    shows the broken-image glyph. That is exactly what the DoorDash and
+    Salesforce dock chips did.
+    """
     src = read(DATA)
     i = src.index("const ZFR_LOGO=")
     logos = json.loads(brace_match(src, src.index("{", i)))
     svg = logos.get(name)
     if not svg:
         return None
+    if "xmlns=" not in svg:
+        svg = svg.replace("<svg ", '<svg xmlns="http://www.w3.org/2000/svg" ', 1)
     return "data:image/svg+xml;base64," + __import__("base64").b64encode(svg.encode()).decode()
 
 
@@ -360,6 +371,31 @@ def main():
             "COMPANY_IDS={" + ",".join(missing) + ",Notion:",
             "COMPANY_IDS (+%d)" % len(missing),
         )
+
+    # 5c — the cluster's phantom left inset.
+    #
+    # `CategoryGroup` is a `gap-[5px]` flex row whose FIRST child is the
+    # collapsed category-title button: `maxWidth: 0`, invisible — but still in
+    # flow, so it owns a 5px gap slot. Every cluster therefore starts its first
+    # chip 13px from the left edge (8 padding + 0 button + 5 gap) against 8px on
+    # the right. Atul circled the asymmetry on every cluster.
+    #
+    # The fix keeps the button in flow (his hover-expand depends on it) and
+    # cancels only the phantom slot: collapsed marginLeft -5 that returns to 0
+    # when open, with "margin" added to his own slide() transition so the
+    # expand stays smooth.
+    s = replace_once(
+        s,
+        "maxWidth:$?240:0,opacity:$?1:0,paddingLeft:$?10:0",
+        "marginLeft:$?0:-5,maxWidth:$?240:0,opacity:$?1:0,paddingLeft:$?10:0",
+        "CategoryGroup collapsed-title gap slot",
+    )
+    s = replace_once(
+        s,
+        'transition:slide(Zn,["max-width","opacity","padding"])},children:Vn.title}',
+        'transition:slide(Zn,["max-width","opacity","padding","margin"])},children:Vn.title}',
+        "CategoryGroup title transition (+margin)",
+    )
 
     # 6 — the camera handle.
     anchor = "function releaseCamera(){setMapCamera(null)}"

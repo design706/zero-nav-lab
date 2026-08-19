@@ -11,8 +11,8 @@ components were rewritten — the flow drives them.
 | | |
 |---|---|
 | **1 · welcome** | Lands on the **sharp** world, blurs it, *then* speaks. "Welcome to Zero, Ada." / "We've mapped out your journey." / **Next** |
-| **2 · journey** | The twelve weeks as glass cards, staggered in left→right on a full-bleed rail with fading edges. Free scroll. One CTA: **Let's begin** |
-| **3 · morph** | Each card's mark flies onto **its own** dock chip while the dock fades up underneath, then the world comes back into focus |
+| **2 · journey** | Title banded across the top, CTA pinned at the bottom, city visible between. The twelve weeks as glass cards **grouped inside labelled category containers**, staggered in left→right on a full-bleed rail with fading edges. Free scroll. One CTA: **Let's begin** |
+| **3 · morph** | Each card's mark flies **on an arc** onto its own dock chip while the groups sink and the dock fades up underneath, then the world comes back into focus |
 | **4 · landing** | Camera flies into week one's building → the card lands as the city settles → his tether draws the line |
 
 The blur is an *event*, not a backdrop: a modal is something you dismiss, and
@@ -22,10 +22,11 @@ unblurs rather than closing anything.
 
 ## Weeks belong to the roadmap. Categories belong to the navigation.
 
-A card says **Week 1** *and* **Growth & Revenue Optimization**. The dock groups
-by the second, using the product's own four category ids and titles. The learner
-meets their twelve weeks in onboarding, then recognises the same work in the app
-organised the way the product organises it.
+A card says **Week 1**; the **container it sits in** says Growth & Revenue
+Optimization — once, for all of its cards. (A per-card category chip was tried
+and dropped: repeating the same label three times inside one category is what
+made it read as noise.) The dock groups by the same four categories, in the same
+order, so the journey and the navigation are one arrangement seen twice.
 
 | Category | Briefs |
 |---|---|
@@ -53,6 +54,7 @@ before replacement; the script refuses to run twice.
 | `afterCategories 5 → 4` | Job Portal closes a four-category rail |
 | `COMPANY_LOGOS` +3 | DoorDash, Salesforce, Amplitude — a company with no logo renders as a blank chip |
 | `COMPANY_IDS` +2 | **Stripe and Uber had no map id**, so they got no building marker and his tether had nothing to anchor to. The ids come from his own `worldMapPoints` |
+| `CategoryGroup` collapsed title | its `maxWidth: 0` title button still owned a **5px flex-gap slot**, so every cluster's first chip sat 5px further from the left edge than the last sat from the right. Collapsed `marginLeft: -5` cancels the phantom slot |
 | `window.__navlab` | camera handle + the roadmap object, both module-scoped with no bridge |
 | `streak 6 → 0` | a first-time learner has no streak |
 
@@ -82,3 +84,12 @@ animates on opacity alone.
 - **His tether only tracks for a moment after a map transform.** Reveal the card
   *inside* the camera flight, not after it settles, or his tracker has already
   given up and no line is ever drawn.
+- **An inline SVG is not a standalone SVG.** These logos were authored for inline
+  injection, where the HTML parser supplies the namespace, so most omit `xmlns`.
+  Dropped into `<img src="data:image/svg+xml…">` they are documents, and without
+  the namespace they fail silently — `complete` true, `naturalWidth` 0, broken
+  glyph. `patch-bundle.py` injects it.
+- **Kill fixed card heights in every rule, including the media query.** The base
+  rule lost `height: 54vh` but `@media (max-height: 820px)` still set `56vh`, so
+  every card measured exactly 403px and the last line of "you hand in" stayed
+  shaved. Heights are auto; `align-items: stretch` evens them per group.

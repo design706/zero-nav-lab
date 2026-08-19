@@ -74,29 +74,26 @@
     });
   }
 
+  /* The entrance is "land on the sharp world, watch it blur" — which is only a
+     beat if there IS a world. On a cold cache the 3MB city image can still be
+     in flight when the dock resolves, and the blur then performs over a grey
+     void. So the flow also waits for the map image itself (decoded, not merely
+     requested), with a timeout so a broken image can never strand the flow. */
+  function waitForMap(timeout) {
+    var t0 = Date.now();
+    return new Promise(function (resolve) {
+      (function poll() {
+        var img = document.querySelector('img[src*="zero-city"], img[src^="blob:"]');
+        if (img && img.complete && img.naturalWidth > 0) return resolve(true);
+        if (Date.now() - t0 > timeout) return resolve(false);
+        setTimeout(poll, 200);
+      })();
+    });
+  }
+
   /* ── The journey ──────────────────────────────────────────────────────────
      Week labels derived here; category read from the patched fixture so the
      card and its dock cluster can never name the work differently. */
-  /* Company -> category title, read from THE SAME roadmap object the dock
-     groups by (exposed on `window.__navlab` by patch-bundle.py). A copy of the
-     mapping here could drift from the fixture; a reference cannot. Populated
-     lazily because the bundle defines it after this script parses. */
-  var CATEGORY_OF = null;
-  function categoryOf(company) {
-    if (!CATEGORY_OF) {
-      CATEGORY_OF = {};
-      try {
-        var rm = window.__navlab && window.__navlab.roadmap;
-        (rm && rm.categories || []).forEach(function (cat) {
-          (cat.scenarios || []).forEach(function (sc) {
-            if (sc.company && sc.company.name) CATEGORY_OF[sc.company.name] = cat.title;
-          });
-        });
-      } catch (e) { /* shape changed — cards simply omit the category chip */ }
-    }
-    return CATEGORY_OF[company];
-  }
-
   function weeks() {
     var out = [], wk = 1;
     CURRICULUM.forEach(function (c, i) {
@@ -105,6 +102,66 @@
     });
     return out;
   }
+
+  /* The journey, grouped the way the DOCK groups it — read from the same
+     fixture object his rail renders, so the two surfaces cannot disagree about
+     which brief belongs to which category. Weeks stay on the cards; the group
+     carries the category. Milestone cards (portfolio, job portal) sit BETWEEN
+     groups at the same positions their pills hold on the rail: after the third
+     category, and at the end. */
+  function groupedJourney() {
+    var byCo = {};
+    weeks().forEach(function (w) { byCo[w.c.co] = w; });
+    var rm = (window.__navlab && window.__navlab.roadmap) || { categories: [] };
+    var out = [];
+    (rm.categories || []).forEach(function (cat, i) {
+      out.push({
+        kind: 'group',
+        title: cat.title,
+        items: (cat.scenarios || [])
+          .map(function (sc) { return byCo[sc.company && sc.company.name]; })
+          .filter(Boolean)
+      });
+      if (i === 2) out.push({ kind: 'portfolio' });
+    });
+    out.push({ kind: 'jobportal' });
+    return out;
+  }
+  /* The journey, grouped the way the DOCK groups it — read from the same
+     fixture object his rail renders, so the two surfaces cannot disagree about
+     which brief belongs to which category. Weeks stay on the cards; the group
+     carries the category. The two milestone cards sit BETWEEN groups at the
+     positions their pills hold on the rail: after the third category, and last. */
+  function groupedJourney() {
+    var byCo = {};
+    weeks().forEach(function (w) { byCo[w.c.co] = w; });
+    var rm = (window.__navlab && window.__navlab.roadmap) || { categories: [] };
+    var out = [];
+    (rm.categories || []).forEach(function (cat, i) {
+      out.push({
+        kind: 'group',
+        title: cat.title,
+        items: (cat.scenarios || [])
+          .map(function (sc) { return byCo[sc.company && sc.company.name]; })
+          .filter(Boolean)
+      });
+      if (i === 2) out.push({ kind: 'portfolio' });
+    });
+    out.push({ kind: 'jobportal' });
+    return out;
+  }
+
+  /* The portfolio unlock is authored INSIDE a brief in CURRICULUM (the one it
+     lands after), so it is looked up rather than restated here. */
+  function portfolioUnlock() {
+    for (var i = 0; i < CURRICULUM.length; i++) if (CURRICULUM[i].unlock) return CURRICULUM[i].unlock;
+    return ['\u{1F4C1}', 'Your portfolio goes live', 'recruiters can see it'];
+  }
+
+  /* Six containers at 44ms lands the whole cascade inside the 500ms budget
+     the motion contract sets. */
+  var STAGGER = 44;
+
   var TOTAL_WEEKS = CURRICULUM.reduce(function (a, c) { return a + c.weeks; }, 0);
 
   /* ── Cards ────────────────────────────────────────────────────────────────
@@ -131,11 +188,9 @@
     who.appendChild(heads);
     head.appendChild(who);
 
-    var cat = categoryOf(c.co);
-    if (cat) {
-      var catChip = mk('span', 'zfr-cat shrink-0 rounded-full bg-white/10 px-[11px] py-[6px] font-pp-supply-mono text-[11px] uppercase tracking-[0.08em] text-white/50', cat);
-      head.appendChild(catChip);
-    }
+    /* No category chip on the card any more — the GROUP the card sits in says
+       it once, for all of its cards, which is what the chip was failing to do
+       by repeating itself inside a single category. */
     el.appendChild(head);
     el._logo = plate;
 
@@ -256,10 +311,19 @@
       'px;width:' + a.w + 'px;height:' + a.h + 'px;margin:0;z-index:100000;pointer-events:none;';
     document.body.appendChild(clone);
     var scale = Math.max(0.3, Math.min(1, (b.h || 26) / (a.h || 46)));
+    var dx = b.x - a.x, dy = b.y - a.y;
+    /* A lift at the midpoint, so the mark travels on a curve instead of sliding
+       down a straight diagonal. Scaled to the distance and capped, so a short
+       hop does not loop and a long one does not balloon — the arc should read
+       as the mark being carried, not thrown. */
+    var lift = Math.min(90, Math.max(28, Math.hypot(dx, dy) * 0.18));
     clone.animate([
       { transform: 'translate(0,0) scale(1)', opacity: 1, offset: 0 },
-      { opacity: 1, offset: 0.75 },
-      { transform: 'translate(' + (b.x - a.x) + 'px,' + (b.y - a.y) + 'px) scale(' + scale + ')',
+      { transform: 'translate(' + (dx * 0.55) + 'px,' + (dy * 0.55 - lift) + 'px) scale(' +
+        (1 - (1 - scale) * 0.5) + ')', opacity: 1, offset: 0.55 },
+      { transform: 'translate(' + (dx * 0.82) + 'px,' + (dy * 0.82 - lift * 0.34) + 'px) scale(' +
+        (1 - (1 - scale) * 0.82) + ')', opacity: 1, offset: 0.78 },
+      { transform: 'translate(' + dx + 'px,' + dy + 'px) scale(' + scale + ')',
         opacity: 0, offset: 1 }
     ], {
       duration: REDUCE ? 0 : 720, delay: REDUCE ? 0 : delay,
@@ -275,6 +339,9 @@
   function buildJourney() {
     var wrap = mk('div', 'zfr-journey');
 
+    /* Header band across the top. The title anchors the screen from above
+       rather than sitting on the cards, which leaves the city visible between
+       it and the rail. */
     var head = mk('div', 'zfr-jhead');
     head.appendChild(mk('h2', 'zfr-h2 font-stk-bureau-serif tracking-[-0.02em] text-white', 'Your journey'));
     var chip = mk('span', 'flex h-[40px] shrink-0 items-center gap-[9px] rounded-full bg-white/10 px-[18px] font-pp-supply-mono text-[15px] uppercase tracking-[0.06em] text-white/80');
@@ -286,28 +353,46 @@
     /* Full-bleed rail. The mask is applied to a WRAPPER, never to the scroller
        that holds the glass — a mask on an ancestor of a backdrop-filter element
        blanks its backdrop the same way `filter` does. */
+    var railWrap = mk('div', 'zfr-rail-wrap');
     var rail = mk('div', 'zfr-rail');
     var scroller = mk('div', 'zfr-scroller');
     scroller.id = 'zfrScroller';
 
-    weeks().forEach(function (w) {
-      var card = briefCard(w);
-      scroller.appendChild(card);
-      cards.push({ el: card, kind: 'co', company: w.c.co });
-      /* The portfolio unlock is authored INSIDE a brief in CURRICULUM, so it
-         renders where the onboarding puts it — right after that week. */
-      if (w.c.unlock) {
-        var u = unlockCard(w.c.unlock, false);
-        scroller.appendChild(u);
-        cards.push({ el: u, kind: 'portfolio' });
+    var order = 0;
+    groupedJourney().forEach(function (node) {
+      if (node.kind === 'group') {
+        /* One container per category, labelled once. Cards inside stretch to
+           the tallest sibling, so a category reads as one block of work rather
+           than a ragged row of separate things. */
+        var g = mk('div', 'zfr-group');
+        g.style.animationDelay = (120 + order * STAGGER) + 'ms';
+        g.appendChild(mk('div', 'zfr-glabel font-pp-supply-mono uppercase text-white/50', node.title));
+        var row = mk('div', 'zfr-grow');
+        node.items.forEach(function (w) {
+          var card = briefCard(w);
+          row.appendChild(card);
+          cards.push({ el: card, kind: 'co', company: w.c.co });
+          order++;
+        });
+        g.appendChild(row);
+        scroller.appendChild(g);
+        return;
       }
+      /* The two unlocks stand alone — belonging to no category is the whole
+         point of them. */
+      var u = node.kind === 'portfolio'
+        ? unlockCard(portfolioUnlock(), false)
+        : unlockCard(RM_FINALE, true);
+      u.classList.add('zfr-solo');
+      u.style.animationDelay = (120 + order * STAGGER) + 'ms';
+      order++;
+      scroller.appendChild(u);
+      cards.push({ el: u, kind: node.kind });
     });
-    var fin = unlockCard(RM_FINALE, true);
-    scroller.appendChild(fin);
-    cards.push({ el: fin, kind: 'jobportal' });
 
     rail.appendChild(scroller);
-    wrap.appendChild(rail);
+    railWrap.appendChild(rail);
+    wrap.appendChild(railWrap);
     return wrap;
   }
 
@@ -423,6 +508,9 @@
     /* Start where a first-time learner starts: the whole world in frame. */
     try { if (window.__navlab && window.__navlab.releaseCamera) window.__navlab.releaseCamera(); } catch (e) {}
 
+    /* …and make sure there IS a world before performing the blur on it. */
+    await waitForMap(12000);
+
     var w = mk('div', 'zfr-welcome');
     /* No eyebrow. "WELCOME TO ZERO" above "Welcome to Zero, Ada." said the same
        thing twice, and the headline says it better. */
@@ -456,9 +544,6 @@
         bar.appendChild(go);
         stage.appendChild(bar);
         setBeat('journey');
-
-        var step = staggerStep(cards.length);
-        cards.forEach(function (c, i) { c.el.style.animationDelay = (120 + i * step) + 'ms'; });
 
         go.onclick = function () { morph(dock); };
       }, REDUCE ? 0 : 260);
