@@ -117,7 +117,7 @@
   justify-content: space-between;
   gap: 24px;
   flex: 0 0 auto;
-  padding: clamp(26px, 5vh, 54px) var(--zfr-inset, 56px) 0;
+  padding: clamp(18px, 3.6vh, 40px) var(--zfr-inset, 56px) 0;
 }
 /* The rail takes the space between the header and the CTA and centres itself
    in it, so the cards sit in the middle of the screen rather than under the
@@ -133,7 +133,7 @@
   flex: 0 0 auto;
   display: grid;
   justify-items: center;
-  padding-bottom: clamp(22px, 4.5vh, 46px);
+  padding-bottom: clamp(16px, 3.2vh, 38px);
 }
 
 /* Full-bleed rail with fading edges.
@@ -171,7 +171,14 @@
      the one card that must be legible, half dissolved. */
   scroll-padding-left: var(--zfr-inset, 56px);
   scrollbar-width: none;
-  padding: 6px var(--zfr-inset, 56px) 10px;
+  /* The vertical padding is structural, not spacing.
+     `overflow-x: auto` forces the cross axis to clip, and the group's box was
+     landing EXACTLY on that clip line — top and bottom flush to the pixel. A
+     54px corner radius sitting on the boundary gets shaved into a flat edge,
+     which read as a crop straight across the bottom of every container. The
+     padding moves the clip line away from the corners; the header and CTA gave
+     up the equivalent space above and below so the column still fits. */
+  padding: 14px var(--zfr-inset, 56px) 18px;
 }
 #zfr .zfr-scroller::-webkit-scrollbar { display: none; }
 

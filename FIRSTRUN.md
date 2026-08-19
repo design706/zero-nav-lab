@@ -89,6 +89,12 @@ animates on opacity alone.
   Dropped into `<img src="data:image/svg+xml…">` they are documents, and without
   the namespace they fail silently — `complete` true, `naturalWidth` 0, broken
   glyph. `patch-bundle.py` injects it.
+- **A rounded box flush with a clip line loses its corners.** `overflow-x: auto`
+  forces the cross axis to clip, and the group's box landed exactly on that
+  boundary — a 54px radius sitting on the clip line got shaved into a flat edge
+  that read as a crop across the bottom of every container. The scroller carries
+  vertical padding so the clip line stays off the corners; the header and CTA
+  gave up the equivalent space so the column still fits.
 - **Kill fixed card heights in every rule, including the media query.** The base
   rule lost `height: 54vh` but `@media (max-height: 820px)` still set `56vh`, so
   every card measured exactly 403px and the last line of "you hand in" stayed
