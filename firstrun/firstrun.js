@@ -260,12 +260,20 @@
   }
 
   function scroller() { return document.getElementById('zfrScroller'); }
+  /* Set once a page() produces no movement. Measurement alone is not enough to
+     decide "there is no more journey": if every card already fits on screen
+     there is nothing to scroll, and on a viewport that reports oddly the
+     arithmetic can never reach its own threshold. Either way the CTA must
+     still become "Let's begin" — a Next button that does nothing is a dead
+     end with no way out of the flow. */
+  var exhausted = false;
+
   function atEnd() {
     var sc = scroller();
-    /* 48px of slack: with snap enabled the last resting position can sit a
-       little short of the true maximum, and a CTA that never flips to
-       "Let's begin" is a dead end. */
-    return !sc || sc.scrollLeft >= sc.scrollWidth - sc.clientWidth - 48;
+    if (!sc) return true;
+    if (exhausted) return true;
+    if (sc.scrollWidth <= sc.clientWidth + 1) return true;   // nothing to page
+    return sc.scrollLeft >= sc.scrollWidth - sc.clientWidth - 48;
   }
   /* Scroll is tweened by hand rather than with `behavior:'smooth'`.
      Chrome cancels a programmatic smooth scroll whenever scroll-snap is in
@@ -277,14 +285,16 @@
     var max = sc.scrollWidth - sc.clientWidth;
     var from = sc.scrollLeft;
     var to = Math.max(0, Math.min(from + Math.max(320, sc.clientWidth * 0.86), max));
-    if (REDUCE || to === from) { sc.scrollLeft = to; return Promise.resolve(); }
+    if (to <= from + 1) { exhausted = true; return Promise.resolve(); }
+    if (REDUCE) { sc.scrollLeft = to; return Promise.resolve(); }
     return new Promise(function (done) {
       var t0 = performance.now(), dur = 520;
       (function step(now) {
         var t = Math.min(1, (now - t0) / dur);
         var e = 1 - Math.pow(1 - t, 4);            // quartic out, matches the flow
         sc.scrollLeft = from + (to - from) * e;
-        if (t < 1) requestAnimationFrame(step); else done();
+        if (t < 1) requestAnimationFrame(step);
+        else { if (Math.abs(sc.scrollLeft - from) < 2) exhausted = true; done(); }
       })(t0);
     });
   }
